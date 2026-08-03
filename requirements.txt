@@ -1,0 +1,14 @@
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.32,<0.33
+sqlalchemy>=2.0,<2.1
+alembic>=1.14,<1.15
+pydantic[email]>=2.9,<2.10
+pydantic-settings>=2.6,<2.7
+pyjwt>=2.9,<2.10
+passlib[bcrypt]>=1.7,<1.8
+bcrypt>=4.0,<4.1  # passlib 1.7.4 predates bcrypt 4.1's API changes; pin to a compatible version
+python-multipart>=0.0.12,<0.1
+openai>=1.54,<2.0
+Pillow>=11.0,<12.0
+python-dotenv>=1.0,<1.1
+tzdata>=2024.2  # zoneinfo has no system tz database on Windows; this supplies it

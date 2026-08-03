@@ -1,0 +1,16 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+    environment:
+      - DATABASE_URL=sqlite:///./data/food_agent.db
+      - MEDIA_ROOT=/app/media
+      - ENVIRONMENT=prod
+    env_file:
+      - .env
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
