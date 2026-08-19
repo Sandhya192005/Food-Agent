@@ -144,6 +144,8 @@ def create_recommendation(db: Session, user: User) -> RecommendationOut:
         request_context_snapshot=json.dumps(context, default=str),
         response_json=recommendation.model_dump_json(),
         model_used=model_used,
+        created_by=user.id,
+        updated_by=user.id,
     )
     db.add(log)
     db.commit()

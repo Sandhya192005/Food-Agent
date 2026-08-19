@@ -36,12 +36,12 @@ def update_current_user(
     "/me",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete the current user's account",
-    description="Permanently deletes the account and all associated meals, water "
-    "logs, and recommendation history.",
+    description="Soft-deletes the account for audit/history purposes: the account is "
+    "deactivated and marked deleted, but the record is kept, not erased. The email "
+    "becomes permanently unavailable for a new signup.",
 )
 def delete_current_user(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    db.delete(current_user)
-    db.commit()
+    auth_service.soft_delete_user(db, current_user)

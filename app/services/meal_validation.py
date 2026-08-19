@@ -68,7 +68,11 @@ def find_recent_duplicate(db: Session, user_id: int, image_hash: str) -> Meal | 
     )
     candidate = db.execute(
         select(Meal)
-        .where(Meal.user_id == user_id, Meal.image_hash == image_hash)
+        .where(
+            Meal.user_id == user_id,
+            Meal.image_hash == image_hash,
+            Meal.deleted_at.is_(None),
+        )
         .order_by(Meal.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
