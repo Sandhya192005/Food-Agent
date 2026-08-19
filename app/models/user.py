@@ -6,7 +6,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import ActivityLevel, DietPreference, Gender, Goal
-from app.db.base import Base, TimestampMixin
+from app.db.base import AuditMixin, Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.meal import Meal
@@ -25,7 +25,7 @@ user_medical_conditions = Table(
 )
 
 
-class User(TimestampMixin, Base):
+class User(TimestampMixin, AuditMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -71,7 +71,7 @@ class User(TimestampMixin, Base):
     )
 
 
-class MedicalCondition(Base):
+class MedicalCondition(TimestampMixin, AuditMixin, Base):
     __tablename__ = "medical_conditions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -82,7 +82,7 @@ class MedicalCondition(Base):
     )
 
 
-class RefreshToken(TimestampMixin, Base):
+class RefreshToken(TimestampMixin, AuditMixin, Base):
     __tablename__ = "refresh_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
