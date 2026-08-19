@@ -1,10 +1,10 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import AuditMixin, Base, TimestampMixin
 
 
-class RecommendationLog(TimestampMixin, Base):
+class RecommendationLog(TimestampMixin, AuditMixin, Base):
     __tablename__ = "recommendation_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

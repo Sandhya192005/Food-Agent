@@ -3,10 +3,10 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, utcnow
+from app.db.base import AuditMixin, Base, TimestampMixin, utcnow
 
 
-class WaterLog(Base):
+class WaterLog(TimestampMixin, AuditMixin, Base):
     __tablename__ = "water_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -22,7 +22,7 @@ class WaterLog(Base):
     user: Mapped["User"] = relationship(back_populates="water_logs")  # noqa: F821
 
 
-class WaterReminderSnooze(Base):
+class WaterReminderSnooze(TimestampMixin, AuditMixin, Base):
     __tablename__ = "water_reminder_snoozes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

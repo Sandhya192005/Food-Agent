@@ -29,7 +29,13 @@ def _local_day_bounds_utc(user: User, now: datetime | None = None) -> tuple[date
 
 def log_water(db: Session, user: User, payload: WaterLogRequest) -> WaterLog:
     amount_ml = payload.resolved_amount_ml(DEFAULT_QUICK_WATER_AMOUNT_ML)
-    water_log = WaterLog(user_id=user.id, amount_ml=amount_ml, source=payload.source)
+    water_log = WaterLog(
+        user_id=user.id,
+        amount_ml=amount_ml,
+        source=payload.source,
+        created_by=user.id,
+        updated_by=user.id,
+    )
     db.add(water_log)
 
     snooze = db.execute(

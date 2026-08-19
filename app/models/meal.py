@@ -3,10 +3,10 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin, utcnow
+from app.db.base import AuditMixin, Base, TimestampMixin, utcnow
 
 
-class Meal(TimestampMixin, Base):
+class Meal(TimestampMixin, AuditMixin, Base):
     __tablename__ = "meals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -32,7 +32,7 @@ class Meal(TimestampMixin, Base):
     )
 
 
-class MealItem(Base):
+class MealItem(TimestampMixin, AuditMixin, Base):
     __tablename__ = "meal_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

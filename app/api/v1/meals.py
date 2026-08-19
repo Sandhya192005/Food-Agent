@@ -64,7 +64,8 @@ def get_meal(
     "/{meal_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a meal",
-    description="Deletes the meal record and its stored image.",
+    description="Soft-deletes the meal for audit/history purposes (marked deleted, "
+    "hidden from history, but the record is kept) and removes its stored image file.",
 )
 def delete_meal(
     meal_id: int,

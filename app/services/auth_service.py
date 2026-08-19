@@ -86,6 +86,9 @@ def signup(db: Session, payload: SignupRequest) -> User:
     _apply_computed_metrics(user)
 
     db.add(user)
+    db.flush()  # assigns user.id so we can self-stamp created_by/updated_by below
+    user.created_by = user.id
+    user.updated_by = user.id
     db.commit()
     db.refresh(user)
     return user
@@ -159,9 +162,22 @@ def update_profile(db: Session, user: User, payload: UserUpdateRequest) -> User:
     if _METRIC_AFFECTING_FIELDS & update_data.keys():
         _apply_computed_metrics(user)
 
+    user.updated_by = user.id
     db.commit()
     db.refresh(user)
     return user
+
+
+def soft_delete_user(db: Session, user: User) -> None:
+    """Marks the account deleted for audit/history purposes instead of erasing the
+    row, so "who deleted this, and when" stays answerable. Note: this leaves the
+    email permanently unavailable for re-signup, and related meals/water logs/etc.
+    are NOT cascade-removed (that only happens on a real DELETE) - they remain in
+    the database, tied to the now-deleted account."""
+    user.deleted_at = datetime.now(UTC)
+    user.deleted_by = user.id
+    user.is_active = False
+    db.commit()
 
 
 def get_user_by_id(db: Session, user_id: int) -> User:

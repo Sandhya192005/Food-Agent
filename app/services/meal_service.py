@@ -62,6 +62,8 @@ def analyze_and_store_meal(
         analysis_raw_response=json.dumps([vars(i) for i in raw_items], default=str),
         analysis_warning="; ".join(warnings) if warnings else None,
         captured_at=datetime.now(UTC),
+        created_by=user.id,
+        updated_by=user.id,
     )
     meal.items = [
         MealItem(
@@ -78,6 +80,8 @@ def analyze_and_store_meal(
             confidence=i.confidence,
             is_low_confidence=i.is_low_confidence,
             is_calorie_capped=i.is_calorie_capped,
+            created_by=user.id,
+            updated_by=user.id,
         )
         for i in checked_items
     ]
@@ -96,7 +100,7 @@ def list_meals(
     return list(
         db.execute(
             select(Meal)
-            .where(Meal.user_id == user.id)
+            .where(Meal.user_id == user.id, Meal.deleted_at.is_(None))
             .order_by(Meal.captured_at.desc())
             .offset(offset)
             .limit(page_size)
@@ -108,7 +112,7 @@ def get_meal(db: Session, user: User, meal_id: int) -> Meal:
     meal = db.execute(
         select(Meal)
         .options(selectinload(Meal.items))
-        .where(Meal.id == meal_id, Meal.user_id == user.id)
+        .where(Meal.id == meal_id, Meal.user_id == user.id, Meal.deleted_at.is_(None))
     ).scalar_one_or_none()
     if meal is None:
         raise NotFoundError("Meal not found", code="meal_not_found")
@@ -116,7 +120,12 @@ def get_meal(db: Session, user: User, meal_id: int) -> Meal:
 
 
 def delete_meal(db: Session, user: User, storage: StorageBackend, meal_id: int) -> None:
+    """Soft-deletes for audit/history purposes: the row and its meal items stay in the
+    database (marked deleted_at/deleted_by/is_active), only the stored image file is
+    actually removed - "who deleted this, and when" remains queryable after this."""
     meal = get_meal(db, user, meal_id)
     storage.delete(meal.image_path)
-    db.delete(meal)
+    meal.deleted_at = datetime.now(UTC)
+    meal.deleted_by = user.id
+    meal.is_active = False
     db.commit()
