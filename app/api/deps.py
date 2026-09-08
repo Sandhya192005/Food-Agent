@@ -2,7 +2,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AuthError
+from app.core.exceptions import AuthError, PermissionDeniedError
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
@@ -26,3 +26,9 @@ def get_current_user(
     if user is None or not user.is_active:
         raise AuthError("Not authenticated", code="not_authenticated")
     return user
+
+
+def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise PermissionDeniedError("Admin access required", code="admin_required")
+    return current_user

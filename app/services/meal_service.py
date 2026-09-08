@@ -14,13 +14,14 @@ from app.services.ai import vision_service
 from app.services.storage.base import StorageBackend
 
 
-def _to_response(meal: Meal, warnings: list[str], is_duplicate: bool) -> MealAnalyzeResponse:
+def to_response(meal: Meal, warnings: list[str], is_duplicate: bool) -> MealAnalyzeResponse:
     return MealAnalyzeResponse(
         meal_id=meal.id,
         is_duplicate=is_duplicate,
         total_calories=meal.total_calories or 0,
         items=[MealItemOut.from_model(item) for item in meal.items],
         warnings=warnings,
+        source=meal.source,
     )
 
 
@@ -45,7 +46,7 @@ def analyze_and_store_meal(
             select(Meal).options(selectinload(Meal.items)).where(Meal.id == duplicate.id)
         ).scalar_one()
         warnings = [duplicate.analysis_warning] if duplicate.analysis_warning else []
-        return _to_response(duplicate, warnings, is_duplicate=True)
+        return to_response(duplicate, warnings, is_duplicate=True)
 
     raw_items = vision_service.analyze_food_image(raw_bytes)
     checked_items, warnings = meal_validation.apply_sanity_checks(raw_items)
@@ -90,7 +91,7 @@ def analyze_and_store_meal(
     db.commit()
     db.refresh(meal)
 
-    return _to_response(meal, warnings, is_duplicate=False)
+    return to_response(meal, warnings, is_duplicate=False)
 
 
 def list_meals(
@@ -124,7 +125,8 @@ def delete_meal(db: Session, user: User, storage: StorageBackend, meal_id: int) 
     database (marked deleted_at/deleted_by/is_active), only the stored image file is
     actually removed - "who deleted this, and when" remains queryable after this."""
     meal = get_meal(db, user, meal_id)
-    storage.delete(meal.image_path)
+    if meal.image_path is not None:
+        storage.delete(meal.image_path)
     meal.deleted_at = datetime.now(UTC)
     meal.deleted_by = user.id
     meal.is_active = False

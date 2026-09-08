@@ -93,6 +93,21 @@ def auth_headers(test_user: User) -> dict:
 
 
 @pytest.fixture()
+def admin_user(db_session) -> User:
+    user = auth_service.signup(db_session, make_signup_payload(email="admin@example.com"))
+    user.is_admin = True
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture()
+def admin_auth_headers(admin_user: User) -> dict:
+    token = create_access_token(admin_user.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
 def long_lived_auth_headers(test_user: User, monkeypatch) -> dict:
     """For tests that use freezegun to fast-forward hours of simulated time: a
     normal 30-minute access token would expire mid-test for reasons unrelated to

@@ -15,7 +15,7 @@ def _format_grams(value: float | None) -> str | None:
 
 class MealItemOut(BaseModel):
     name: str
-    bounding_box: list[float]
+    bounding_box: list[float] | None
     quantity: str
     approx_cal: float
     protein: str | None = None
@@ -26,9 +26,14 @@ class MealItemOut(BaseModel):
 
     @classmethod
     def from_model(cls, item: "MealItem") -> "MealItemOut":
+        bounding_box = (
+            [item.bbox_x1, item.bbox_y1, item.bbox_x2, item.bbox_y2]
+            if item.bbox_x1 is not None
+            else None
+        )
         return cls(
             name=item.name,
-            bounding_box=[item.bbox_x1, item.bbox_y1, item.bbox_x2, item.bbox_y2],
+            bounding_box=bounding_box,
             quantity=f"{item.quantity_value:g} {item.quantity_unit}",
             approx_cal=item.approx_calories,
             protein=_format_grams(item.protein_g),
@@ -45,12 +50,14 @@ class MealAnalyzeResponse(BaseModel):
     total_calories: float
     items: list[MealItemOut]
     warnings: list[str]
+    source: str = "photo"
 
 
 class MealSummaryOut(BaseModel):
     id: int
     total_calories: float | None
     status: str
+    source: str
     captured_at: datetime
     warnings: list[str]
 
@@ -60,6 +67,7 @@ class MealSummaryOut(BaseModel):
             id=meal.id,
             total_calories=meal.total_calories,
             status=meal.status,
+            source=meal.source,
             captured_at=meal.captured_at,
             warnings=[meal.analysis_warning] if meal.analysis_warning else [],
         )

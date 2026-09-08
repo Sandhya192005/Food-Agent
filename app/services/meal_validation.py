@@ -18,7 +18,7 @@ class RawFoodItem:
     name: str
     quantity_value: float
     quantity_unit: str
-    bbox: tuple[float, float, float, float]
+    bbox: tuple[float, float, float, float] | None
     approx_calories: float
     confidence: float | None
     protein_g: float | None = None

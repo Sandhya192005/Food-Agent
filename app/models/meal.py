@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.constants import MEAL_SOURCE_PHOTO
 from app.db.base import AuditMixin, Base, TimestampMixin, utcnow
 
 
@@ -14,8 +15,15 @@ class Meal(TimestampMixin, AuditMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
 
-    image_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    image_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    # Null for meals logged via a weekly menu template (source="menu_template"),
+    # since there's no uploaded photo in that case.
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default=MEAL_SOURCE_PHOTO)
+    weekly_menu_id: Mapped[int | None] = mapped_column(
+        ForeignKey("weekly_menus.id", ondelete="SET NULL"), nullable=True
+    )
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     total_calories: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -44,10 +52,12 @@ class MealItem(TimestampMixin, AuditMixin, Base):
     quantity_value: Mapped[float] = mapped_column(Float, nullable=False)
     quantity_unit: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    bbox_x1: Mapped[float] = mapped_column(Float, nullable=False)
-    bbox_y1: Mapped[float] = mapped_column(Float, nullable=False)
-    bbox_x2: Mapped[float] = mapped_column(Float, nullable=False)
-    bbox_y2: Mapped[float] = mapped_column(Float, nullable=False)
+    # Null for items from a menu-confirmed meal (source="menu_template"), since
+    # there's no photo to have detected a bounding box in.
+    bbox_x1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_y1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_x2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_y2: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     approx_calories: Mapped[float] = mapped_column(Float, nullable=False)
     protein_g: Mapped[float | None] = mapped_column(Float, nullable=True)

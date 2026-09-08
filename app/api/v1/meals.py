@@ -5,7 +5,8 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.meal import MealAnalyzeResponse, MealDetailOut, MealSummaryOut
-from app.services import meal_service
+from app.schemas.menu import MenuConfirmRequest
+from app.services import meal_service, menu_service
 from app.services.storage.base import StorageBackend
 from app.services.storage.local import get_storage_backend
 
@@ -37,6 +38,24 @@ async def analyze_meal(
         filename=file.filename or "upload.jpg",
         content_type=file.content_type,
     )
+
+
+@router.post(
+    "/confirm-from-menu",
+    response_model=MealAnalyzeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Log today's meal from the recurring office menu",
+    description="Called when the user taps 'Yes' on the GET /menu/today-prompt "
+    "question. Uses the office menu's stored nutrition data to create the meal "
+    "record directly, without an AI vision call or photo upload. If the user taps "
+    "'No' instead, call POST /meals/analyze with a photo as usual.",
+)
+def confirm_meal_from_menu(
+    payload: MenuConfirmRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MealAnalyzeResponse:
+    return menu_service.confirm_meal_from_menu(db, current_user, payload.weekly_menu_id)
 
 
 @router.get("", response_model=list[MealSummaryOut], summary="List meal history")
