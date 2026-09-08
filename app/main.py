@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,17 +10,30 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.error_handlers import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.scheduler import start_scheduler, stop_scheduler
 from app.db.session import SessionLocal
 from app.middleware.request_context import RequestContextMiddleware
 
 configure_logging()
 logger = logging.getLogger("app.main")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # The proactive meal/water agents poll on a timer; skipped during tests so a
+    # background thread doesn't outlive the test DB/session teardown.
+    if settings.ENVIRONMENT != "test":
+        start_scheduler()
+    yield
+    stop_scheduler()
+
+
 app = FastAPI(
     title="AI Food Agent",
     description="Personal nutrition assistant backend: profile-aware food image "
     "analysis, water tracking, and AI-generated nutrition recommendations.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(RequestContextMiddleware)

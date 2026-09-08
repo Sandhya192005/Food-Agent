@@ -13,3 +13,4 @@ Pillow>=11.0,<12.0
 python-dotenv>=1.0,<1.1
 tzdata>=2024.2  # zoneinfo has no system tz database on Windows; this supplies it
 psycopg2-binary>=2.9,<2.10
+apscheduler>=3.10,<3.11

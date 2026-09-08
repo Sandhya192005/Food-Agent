@@ -3,6 +3,7 @@ from pathlib import Path
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-placeholder")
+os.environ.setdefault("ENVIRONMENT", "test")
 
 import pytest
 from fastapi.testclient import TestClient
