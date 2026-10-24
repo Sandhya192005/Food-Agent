@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.constants import DAY_OF_WEEK_DISPLAY, DayOfWeek, MealType
 
@@ -79,4 +80,28 @@ class MenuPromptOut(BaseModel):
 
 
 class MenuConfirmRequest(BaseModel):
-    weekly_menu_id: int
+    """Pick the menu slot either by day + meal type, or by its weekly_menu_id
+    (as returned by GET /menu/today-prompt)."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"day_of_week": "tuesday", "meal_type": "lunch"}}
+    )
+
+    day_of_week: DayOfWeek | None = None
+    meal_type: MealType | None = None
+    weekly_menu_id: int | None = None
+    eaten_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the meal was eaten, for logging a missed meal later. Defaults to now. "
+            "Must be within the last 7 days, not in the future, and fall on the menu's "
+            "day of week. A time without an offset is read in the user's timezone."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _require_slot(self) -> "MenuConfirmRequest":
+        has_day_slot = self.day_of_week is not None and self.meal_type is not None
+        if self.weekly_menu_id is None and not has_day_slot:
+            raise ValueError("Provide day_of_week and meal_type, or weekly_menu_id")
+        return self

@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -12,6 +12,7 @@ from app.schemas.meal import MealAnalyzeResponse, MealItemOut
 from app.services import meal_validation
 from app.services.ai import vision_service
 from app.services.storage.base import StorageBackend
+from app.services.timezone_utils import user_timezone
 
 
 def to_response(meal: Meal, warnings: list[str], is_duplicate: bool) -> MealAnalyzeResponse:
@@ -95,16 +96,24 @@ def analyze_and_store_meal(
 
 
 def list_meals(
-    db: Session, user: User, *, page: int, page_size: int
+    db: Session, user: User, *, page: int, page_size: int, on_date: date | None = None
 ) -> list[Meal]:
+    """Newest first. `on_date` keeps only meals eaten on that day in the user's timezone."""
     offset = (page - 1) * page_size
+    query = (
+        select(Meal)
+        .options(selectinload(Meal.items), selectinload(Meal.weekly_menu))
+        .where(Meal.user_id == user.id, Meal.deleted_at.is_(None))
+    )
+    if on_date is not None:
+        start = datetime.combine(on_date, time.min, tzinfo=user_timezone(user))
+        query = query.where(
+            Meal.captured_at >= start.astimezone(UTC),
+            Meal.captured_at < (start + timedelta(days=1)).astimezone(UTC),
+        )
     return list(
         db.execute(
-            select(Meal)
-            .where(Meal.user_id == user.id, Meal.deleted_at.is_(None))
-            .order_by(Meal.captured_at.desc())
-            .offset(offset)
-            .limit(page_size)
+            query.order_by(Meal.captured_at.desc()).offset(offset).limit(page_size)
         ).scalars()
     )
 

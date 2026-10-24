@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,7 @@ from app.schemas.menu import MenuConfirmRequest
 from app.services import meal_service, menu_service
 from app.services.storage.base import StorageBackend
 from app.services.storage.local import get_storage_backend
+from app.services.timezone_utils import user_timezone
 
 router = APIRouter(prefix="/meals", tags=["meals"])
 
@@ -47,7 +50,8 @@ async def analyze_meal(
     summary="Log today's meal from the recurring office menu",
     description="Called when the user taps 'Yes' on the GET /menu/today-prompt "
     "question. Uses the office menu's stored nutrition data to create the meal "
-    "record directly, without an AI vision call or photo upload. If the user taps "
+    "record directly, without an AI vision call or photo upload. Pick the menu by "
+    "day_of_week + meal_type (e.g. tuesday + lunch), or by weekly_menu_id. If the user taps "
     "'No' instead, call POST /meals/analyze with a photo as usual.",
 )
 def confirm_meal_from_menu(
@@ -55,18 +59,26 @@ def confirm_meal_from_menu(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MealAnalyzeResponse:
-    return menu_service.confirm_meal_from_menu(db, current_user, payload.weekly_menu_id)
+    return menu_service.confirm_meal_from_menu(db, current_user, payload)
 
 
 @router.get("", response_model=list[MealSummaryOut], summary="List meal history")
 def list_meals(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    on_date: date | None = Query(
+        default=None,
+        alias="date",
+        description="Only meals eaten on this day (YYYY-MM-DD, in your timezone)",
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[MealSummaryOut]:
-    meals = meal_service.list_meals(db, current_user, page=page, page_size=page_size)
-    return [MealSummaryOut.from_model(m) for m in meals]
+    meals = meal_service.list_meals(
+        db, current_user, page=page, page_size=page_size, on_date=on_date
+    )
+    timezone = user_timezone(current_user)
+    return [MealSummaryOut.from_model(m, timezone) for m in meals]
 
 
 @router.get("/{meal_id}", response_model=MealDetailOut, summary="Get a single meal's detail")
@@ -76,7 +88,7 @@ def get_meal(
     db: Session = Depends(get_db),
 ) -> MealDetailOut:
     meal = meal_service.get_meal(db, current_user, meal_id)
-    return MealDetailOut.from_model(meal)
+    return MealDetailOut.from_model(meal, user_timezone(current_user))
 
 
 @router.delete(

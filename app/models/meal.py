@@ -35,6 +35,7 @@ class Meal(TimestampMixin, AuditMixin, Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="meals")  # noqa: F821
+    weekly_menu: Mapped["WeeklyMenu | None"] = relationship(viewonly=True)  # noqa: F821
     items: Mapped[list["MealItem"]] = relationship(
         back_populates="meal", cascade="all, delete-orphan"
     )

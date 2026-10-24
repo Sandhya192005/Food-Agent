@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_user, get_current_user
-from app.core.constants import MealType
+from app.core.constants import DayOfWeek, MealType
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.menu import MenuPromptOut, WeeklyMenuIn, WeeklyMenuOut
@@ -21,6 +21,22 @@ def get_weekly_menu(
     db: Session = Depends(get_db),
 ) -> list[WeeklyMenuOut]:
     menus = menu_service.get_week_menu(db)
+    return [WeeklyMenuOut.from_model(m) for m in menus]
+
+
+@router.get(
+    "/weekly/{day_of_week}",
+    response_model=list[WeeklyMenuOut],
+    summary="Get the office menu for one day of the week",
+    description="Returns every meal slot (breakfast, lunch, dinner, snack) set for that "
+    "day. Returns an empty list if nothing is set for the day.",
+)
+def get_day_menu(
+    day_of_week: DayOfWeek,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[WeeklyMenuOut]:
+    menus = menu_service.get_day_menu(db, day_of_week)
     return [WeeklyMenuOut.from_model(m) for m in menus]
 
 

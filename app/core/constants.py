@@ -47,6 +47,17 @@ class DayOfWeek(str, enum.Enum):
     SUNDAY = "sunday"
 
 
+class NotificationType(str, enum.Enum):
+    MEAL_NUDGE = "meal_nudge"
+    WATER_CHECK = "water_check"
+
+
+class NotificationStatus(str, enum.Enum):
+    PENDING = "pending"
+    YES = "yes"
+    NO = "no"
+
+
 ACTIVITY_MULTIPLIERS: dict[ActivityLevel, float] = {
     ActivityLevel.SEDENTARY: 1.2,
     ActivityLevel.LIGHT: 1.375,
@@ -103,9 +114,43 @@ MEAL_TYPE_TIME_RANGES: list[tuple[MealType, time, time]] = [
     (MealType.DINNER, time(19, 30), time(21, 0)),
 ]
 
+
+def meal_type_for_time(local_time: time) -> MealType:
+    """Which meal a local time of day falls in; SNACK outside all windows."""
+    for meal_type, start, end in MEAL_TYPE_TIME_RANGES:
+        if start <= local_time < end:
+            return meal_type
+    return MealType.SNACK
+
+
 WATER_SOURCE_QUICK_YES = "quick_yes"
 WATER_SOURCE_CUSTOM_AMOUNT = "custom_amount"
 DEFAULT_QUICK_WATER_AMOUNT_ML = 250
+
+# --- Proactive agents (scheduler-driven, app/services/notification_service.py) ---
+
+# Office break window (local time) the meal-nudge agent checks in.
+BREAK_TIME_START = time(11, 30)
+BREAK_TIME_END = time(12, 30)
+
+# A rough protein target, not a clinical recommendation: used only to decide
+# whether the nudge fires, not surfaced to the user as medical advice.
+PROTEIN_GOAL_G_PER_KG = 1.0
+
+# After the user taps "No" on a water check, how soon the agent asks again.
+# Deliberately much shorter than the pull-based WATER_REMINDER_THRESHOLD_MINUTES
+# since this is the proactive nudge loop, not the on-demand /water/reminder check.
+WATER_RETRY_AFTER_NO_MINUTES = 2
+
+# Simple rule-based snack suggestions for the meal-nudge agent — avoids an OpenAI
+# call on every scheduler tick for every user. (name, protein_g, approx_calories)
+MEAL_NUDGE_CATALOG: list[dict[str, float | str]] = [
+    {"name": "a boiled egg", "protein_g": 6, "approx_calories": 78},
+    {"name": "a bowl of roasted chana", "protein_g": 7, "approx_calories": 120},
+    {"name": "a handful of almonds", "protein_g": 6, "approx_calories": 170},
+    {"name": "a small bowl of sprouts salad", "protein_g": 7, "approx_calories": 100},
+    {"name": "a glass of buttermilk with roasted cumin", "protein_g": 3, "approx_calories": 60},
+]
 
 SEED_MEDICAL_CONDITIONS = [
     "Diabetes",

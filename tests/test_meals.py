@@ -100,6 +100,9 @@ def test_list_and_get_and_delete_meal(client, auth_headers, mock_vision):
     listing = client.get("/api/v1/meals", headers=auth_headers)
     assert listing.status_code == 200
     assert len(listing.json()) == 1
+    assert listing.json()[0]["title"] == "Idli, Sambar"
+    # Photo meals get their meal type from the time they were eaten.
+    assert listing.json()[0]["meal_type"] in {"breakfast", "lunch", "dinner", "snack"}
 
     detail = client.get(f"/api/v1/meals/{meal_id}", headers=auth_headers)
     assert detail.status_code == 200
@@ -141,3 +144,14 @@ def test_meal_not_found_for_other_users_meal(client, auth_headers, mock_vision):
 
     response = client.get(f"/api/v1/meals/{meal_id}", headers=other_headers)
     assert response.status_code == 404
+
+
+def test_meal_type_for_time_uses_meal_windows():
+    from datetime import time
+
+    from app.core.constants import MealType, meal_type_for_time
+
+    assert meal_type_for_time(time(9, 30)) == MealType.BREAKFAST
+    assert meal_type_for_time(time(14, 0)) == MealType.LUNCH
+    assert meal_type_for_time(time(20, 0)) == MealType.DINNER
+    assert meal_type_for_time(time(16, 0)) == MealType.SNACK
