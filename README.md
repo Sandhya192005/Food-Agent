@@ -68,6 +68,24 @@ schema, and the key design decisions behind them.
    and paste an access token (from a signup/login response) to unlock protected
    endpoints.
 
+### Running the web frontend
+
+The React app lives in `frontend/` (Vite + TypeScript). With the API running on
+port 8000, in a second terminal:
+
+```
+cd frontend
+npm install        # first time only
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The dev server forwards `/api` calls to the backend,
+so no CORS setup is needed. Pages: Today (dashboard), Log meal (photo upload),
+Meals, Office menu, Water, Suggestions and Profile. The 🔔 bell shows the water and
+meal agents' reminders, checking every 30 seconds.
+
+`npm run build` type-checks and produces a production build in `frontend/dist/`.
+
 ### Making an account an admin
 
 Only admins can create/edit/delete the recurring weekly menu (`PUT`/`DELETE
