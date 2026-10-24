@@ -166,6 +166,37 @@ def test_confirm_meal_from_menu_creates_meal_with_correct_totals(
     assert history.json()[0]["source"] == "menu_template"
 
 
+def test_confirm_meal_from_menu_by_day_and_meal_type(client, admin_auth_headers, auth_headers):
+    _create_tuesday_lunch_menu(client, admin_auth_headers)
+
+    response = client.post(
+        "/api/v1/meals/confirm-from-menu",
+        json={"day_of_week": "tuesday", "meal_type": "lunch"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["total_calories"] == 380
+
+
+def test_confirm_meal_from_menu_unset_day_slot_returns_404(client, auth_headers):
+    response = client.post(
+        "/api/v1/meals/confirm-from-menu",
+        json={"day_of_week": "monday", "meal_type": "dinner"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "menu_not_found"
+
+
+def test_confirm_meal_from_menu_requires_day_and_meal_type_or_id(client, auth_headers):
+    response = client.post(
+        "/api/v1/meals/confirm-from-menu",
+        json={"day_of_week": "tuesday"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
 def test_confirm_meal_from_menu_applies_calorie_sanity_cap(
     client, admin_auth_headers, auth_headers
 ):
