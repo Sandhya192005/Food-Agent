@@ -84,12 +84,23 @@ export interface MealSummary {
   status: string;
   source: string;
   weekly_menu_id: number | null;
+  /** From the office menu, or from the time eaten. */
+  meal_type: MealType;
+  /** Office menu name, or the first food items ("Rice, Dal +2 more"). */
+  title: string | null;
   captured_at: string;
   warnings: string[];
 }
 
 export interface MealDetail extends MealSummary {
   items: MealItem[];
+}
+
+/** A meal the user skipped. Stored apart from meals, so not in history. */
+export interface SkippedMeal {
+  id: number;
+  skip_date: string;
+  meal_type: MealType;
 }
 
 export interface WeeklyMenuItem {

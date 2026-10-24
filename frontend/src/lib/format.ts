@@ -59,6 +59,58 @@ export function liveUntil(
   return { mealType: window.type, endLabel: window.endLabel };
 }
 
+/** True once today's window for `mealType` is over (false for snack). */
+export function mealWindowEnded(mealType: MealType, timeZone: string, now: Date = new Date()): boolean {
+  const window = MEAL_WINDOWS.find((w) => w.type === mealType);
+  return !!window && minutesInZone(now, timeZone) >= window.end;
+}
+
+/** True while it's currently `mealType`'s window. Snack has no window, so always true. */
+export function inMealWindow(mealType: MealType, timeZone: string, now: Date = new Date()): boolean {
+  const window = MEAL_WINDOWS.find((w) => w.type === mealType);
+  if (!window) return true;
+  const at = minutesInZone(now, timeZone);
+  return at >= window.start && at < window.end;
+}
+
+/** A sensible default "eaten at" time (HH:MM) when logging a missed meal. */
+export const MEAL_DEFAULT_TIME: Record<MealType, string> = {
+  breakfast: "09:30",
+  lunch: "13:45",
+  dinner: "20:00",
+  snack: "16:30",
+};
+
+/** Current local time in the zone as "HH:MM". */
+export function timeInZone(timeZone: string, now: Date = new Date()): string {
+  const m = minutesInZone(now, timeZone);
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** The most recent date (YYYY-MM-DD, today included) that falls on `day`. */
+export function lastDateFor(day: DayOfWeek, timeZone: string, now: Date = new Date()): string {
+  const todayKey = localDateKey(now, timeZone);
+  const [y, m, d] = todayKey.split("-").map(Number);
+  const back = (DAYS.indexOf(todayInZone(timeZone, now)) - DAYS.indexOf(day) + 7) % 7;
+  return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+}
+
+/** "2026-10-23" → "Fri 23 Oct" */
+export function formatDateKey(key: string): string {
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-IN", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** "13:45" → "1:45 PM" */
+export function formatClock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
 /** "non_veg" → "Non veg" */
 export function label(value: string): string {
   const text = value.replace(/_/g, " ");
@@ -75,8 +127,8 @@ export function localDateKey(date: Date, timeZone: string): string {
   return date.toLocaleDateString("en-CA", { timeZone }); // YYYY-MM-DD
 }
 
-export function todayInZone(timeZone: string): DayOfWeek {
-  const name = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone }).format(new Date());
+export function todayInZone(timeZone: string, now: Date = new Date()): DayOfWeek {
+  const name = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone }).format(now);
   return name.toLowerCase() as DayOfWeek;
 }
 
@@ -88,6 +140,13 @@ export function formatDateTime(value: string, timeZone: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** "9:30 AM" in the user's timezone. */
+export function formatTime(value: string, timeZone: string): string {
+  return parseDate(value)
+    .toLocaleTimeString("en-IN", { timeZone, hour: "numeric", minute: "2-digit" })
+    .toUpperCase();
 }
 
 export function timeAgo(value: string): string {

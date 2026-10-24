@@ -5,7 +5,17 @@ import { MealItems, SOURCE_LABEL, Warnings } from "../components/MealItems";
 import { Card, Empty, ErrorNote, Loading, PageHeader } from "../components/ui";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
-import { formatDateTime, kcal, liveUntil, localDateKey, parseDate } from "../lib/format";
+import {
+  formatDateKey,
+  formatDateTime,
+  formatTime,
+  kcal,
+  label,
+  liveUntil,
+  localDateKey,
+  MEAL_EMOJI,
+  parseDate,
+} from "../lib/format";
 import { useAction, useNow, useQuery } from "../lib/hooks";
 import type { MealDetail as MealDetailType, MealSummary } from "../lib/types";
 
@@ -14,9 +24,12 @@ const PAGE_SIZE = 20;
 export function Meals() {
   const user = useUser();
   const [page, setPage] = useState(1);
+  // "" = all days; otherwise a YYYY-MM-DD day to show.
+  const [day, setDay] = useState("");
   const now = useNow();
+  const todayKey = localDateKey(now, user.timezone);
   const { data: allMeals, error, loading } = useQuery<MealSummary[]>(
-    `/meals?page=${page}&page_size=${PAGE_SIZE}`,
+    day ? `/meals?date=${day}&page_size=100` : `/meals?page=${page}&page_size=${PAGE_SIZE}`,
   );
   // Meals still inside their meal window live on the Today page until it ends.
   const liveCount = (allMeals ?? []).filter((m) => liveUntil(m.captured_at, user.timezone, now)).length;
@@ -61,6 +74,26 @@ export function Meals() {
           </Link>
         }
       />
+      <div className="row gap-sm wrap history-filter">
+        <label className="row gap-sm">
+          <span className="muted small">Show day</span>
+          <input
+            type="date"
+            className="date-input"
+            value={day}
+            max={todayKey}
+            onChange={(e) => {
+              setDay(e.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        {day && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setDay("")}>
+            Show all days
+          </button>
+        )}
+      </div>
       {loading && !data && <Loading />}
       <ErrorNote message={error?.message} />
       {liveCount > 0 && (
@@ -69,7 +102,17 @@ export function Meals() {
           live on the <Link to="/">Today</Link> page and will show here when the meal time ends.
         </p>
       )}
-      {data && data.length === 0 && page === 1 && liveCount === 0 && (
+      {day && data && data.length === 0 && liveCount === 0 && (
+        <Card>
+          <Empty icon="📅">
+            <p>No meals logged on {formatDateKey(day)}.</p>
+            <p className="muted small">
+              Missed one? Log it from the <Link to="/menu">Office menu</Link> (up to 7 days back).
+            </p>
+          </Empty>
+        </Card>
+      )}
+      {!day && data && data.length === 0 && page === 1 && liveCount === 0 && (
         <Card>
           <Empty icon="🍽️">
             <p>No meals logged yet.</p>
@@ -86,15 +129,20 @@ export function Meals() {
               {group.meals.map((meal) => (
                 <li key={meal.id}>
                   <Link to={`/meals/${meal.id}`} className="meal-row">
-                    <span>
-                      <strong>{SOURCE_LABEL[meal.source] ?? meal.source}</strong>
-                      <span className="muted small">
-                        {" "}
-                        · {formatDateTime(meal.captured_at, user.timezone)}
-                      </span>
-                      {meal.warnings.length > 0 && <span className="tag tag-warn">Check</span>}
+                    <span aria-hidden className="meal-row-icon">
+                      {MEAL_EMOJI[meal.meal_type]}
                     </span>
-                    <span>{kcal(meal.total_calories)} ›</span>
+                    <span className="meal-row-main">
+                      <span>
+                        <strong>{label(meal.meal_type)}</strong>
+                        {meal.title && <span> · {meal.title}</span>}
+                        {meal.warnings.length > 0 && <span className="tag tag-warn">Check</span>}
+                      </span>
+                      <span className="muted small">
+                        {SOURCE_LABEL[meal.source] ?? meal.source} · {formatTime(meal.captured_at, user.timezone)}
+                      </span>
+                    </span>
+                    <span className="meal-row-kcal">{kcal(meal.total_calories)} ›</span>
                   </Link>
                 </li>
               ))}
@@ -102,7 +150,7 @@ export function Meals() {
           </Card>
         ))}
       </div>
-      {allMeals && (page > 1 || allMeals.length === PAGE_SIZE) && (
+      {!day && allMeals && (page > 1 || allMeals.length === PAGE_SIZE) && (
         <div className="row gap-sm center-row">
           <button className="btn btn-ghost" disabled={page === 1} onClick={() => setPage(page - 1)}>
             ← Newer
@@ -149,10 +197,16 @@ export function MealDetail() {
       <ErrorNote message={error?.message} />
       {data && (
         <Card
-          title={SOURCE_LABEL[data.source] ?? data.source}
+          title={
+            <>
+              <span aria-hidden>{MEAL_EMOJI[data.meal_type]}</span> {label(data.meal_type)}
+              {data.title ? ` · ${data.title}` : ""}
+            </>
+          }
           action={<strong>{kcal(data.total_calories)}</strong>}
         >
           <div className="stack">
+            <p className="muted small">{SOURCE_LABEL[data.source] ?? data.source}</p>
             <MealItems items={data.items} />
             <Warnings warnings={data.warnings} />
             <div className="row gap-sm">

@@ -606,6 +606,23 @@ legend {
   color: var(--text);
   text-decoration: none;
 }
+.meal-row-icon {
+  font-size: 1.4rem;
+  flex: none;
+}
+.meal-row-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.meal-row-main .tag {
+  margin-left: 6px;
+}
+.meal-row-kcal {
+  flex: none;
+  white-space: nowrap;
+}
 .meal-list li:last-child .meal-row {
   border-bottom: 0;
 }
@@ -1018,3 +1035,65 @@ legend {
   gap: 8px;
   margin-bottom: 16px;
 }
+
+/* ---------- Logging a missed menu meal ---------- */
+
+.time-input {
+  width: auto;
+  min-width: 120px;
+}
+.missed-form {
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.missed-form p {
+  margin: 0;
+}
+.logged-note {
+  display: block;
+  text-decoration: none;
+}
+.logged-note:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Meal history day filter ---------- */
+
+.history-filter {
+  margin-bottom: 16px;
+}
+.date-input {
+  width: auto;
+  min-width: 160px;
+}
+
+/* ---------- Skipped meals ---------- */
+
+.skipped-meal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.link-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.missed-actions {
+  flex: none;
+}
+

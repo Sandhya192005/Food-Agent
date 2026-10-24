@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -89,6 +90,14 @@ class MenuConfirmRequest(BaseModel):
     day_of_week: DayOfWeek | None = None
     meal_type: MealType | None = None
     weekly_menu_id: int | None = None
+    eaten_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the meal was eaten, for logging a missed meal later. Defaults to now. "
+            "Must be within the last 7 days, not in the future, and fall on the menu's "
+            "day of week. A time without an offset is read in the user's timezone."
+        ),
+    )
 
     @model_validator(mode="after")
     def _require_slot(self) -> "MenuConfirmRequest":

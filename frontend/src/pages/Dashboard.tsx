@@ -6,6 +6,7 @@ import { WaterCard } from "../components/WaterCard";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
 import {
+  formatTime,
   grams,
   kcal,
   label,
@@ -13,6 +14,7 @@ import {
   localDateKey,
   MEAL_EMOJI,
   MEAL_TIMES,
+  mealWindowEnded,
   money,
   parseDate,
   todayInZone,
@@ -24,6 +26,7 @@ import type {
   MealType,
   MenuPrompt,
   Recommendation,
+  SkippedMeal,
   WeeklyMenu,
 } from "../lib/types";
 
@@ -139,14 +142,16 @@ function TodayIntakeCard() {
 }
 
 /** Today's office menu. During a meal window it asks "Is your lunch going to be …?"
- *  (Yes logs it, No goes to photo upload). Once logged, the meal stays "live" here
- *  until the meal window ends, then moves to meal history. */
+ *  (Yes logs it, No goes to photo upload, or "I skipped it"). Once logged, the meal
+ *  stays "live" here until the meal window ends, then moves to meal history.
+ *  Skipped meals are never stored as meals, so they stay out of history. */
 function MenuPromptCard() {
   const user = useUser();
   const now = useNow();
   const { data, error, loading, reload } = useQuery<MenuPrompt>("/menu/today-prompt");
   const todayMenu = useQuery<WeeklyMenu[]>(`/menu/weekly/${todayInZone(user.timezone)}`);
   const meals = useQuery<MealSummary[]>("/meals?page_size=100");
+  const skips = useQuery<SkippedMeal[]>("/skipped-meals");
   const navigate = useNavigate();
 
   // The current meal depends on the clock, so re-check every minute.
@@ -162,6 +167,15 @@ function MenuPromptCard() {
     });
     notifyDataChanged();
   });
+  const skip = useAction(async (mealType: MealType) => {
+    await api("/skipped-meals", { method: "POST", json: { meal_type: mealType } });
+    notifyDataChanged();
+  });
+  const undoSkip = useAction(async (skipId: number) => {
+    await api(`/skipped-meals/${skipId}`, { method: "DELETE" });
+    notifyDataChanged();
+  });
+  const skipped = new Map((skips.data ?? []).map((s) => [s.meal_type, s]));
 
   // Meals still inside their meal window, keyed by meal type.
   const live = new Map<MealType, { meal: MealSummary; endLabel: string }>();
@@ -170,6 +184,22 @@ function MenuPromptCard() {
     if (info && !live.has(info.mealType)) live.set(info.mealType, { meal, endLabel: info.endLabel });
   }
   const current = data?.has_menu ? live.get(data.meal_type) : undefined;
+  // Office menu meals logged any time today, keyed by menu id.
+  const todayKey = localDateKey(now, user.timezone);
+  const menuLoggedToday = new Map<number, MealSummary>();
+  for (const meal of meals.data ?? []) {
+    if (
+      meal.weekly_menu_id !== null &&
+      localDateKey(parseDate(meal.captured_at), user.timezone) === todayKey &&
+      !menuLoggedToday.has(meal.weekly_menu_id)
+    ) {
+      menuLoggedToday.set(meal.weekly_menu_id, meal);
+    }
+  }
+  // Already logged today but outside the live window (e.g. lunch logged at 1:00 PM).
+  const promptLogged =
+    !current && data?.weekly_menu_id != null ? menuLoggedToday.get(data.weekly_menu_id) : undefined;
+  const promptSkipped = data?.has_menu && !current && !promptLogged ? skipped.get(data.meal_type) : undefined;
 
   return (
     <Card
@@ -181,9 +211,43 @@ function MenuPromptCard() {
       }
     >
       {loading && !data && <Loading />}
-      <ErrorNote message={error?.message ?? todayMenu.error?.message} />
+      <ErrorNote
+        message={error?.message ?? todayMenu.error?.message ?? undoSkip.error ?? undefined}
+      />
       <div className="stack">
-        {data?.has_menu && data.weekly_menu_id !== null && !current && (
+        {data?.has_menu && promptLogged && (
+          <Link to={`/meals/${promptLogged.id}`} className="live-meal">
+            <span className="today-menu-main">
+              <strong>
+                ✅ {label(data.meal_type)} logged today at{" "}
+                {formatTime(promptLogged.captured_at, user.timezone)} · {kcal(promptLogged.total_calories)}
+              </strong>
+            </span>
+            <span aria-hidden>›</span>
+          </Link>
+        )}
+        {data?.has_menu && promptSkipped && (
+          <div className="skipped-meal">
+            <span>
+              ⏭️ <strong>{label(data.meal_type)} skipped</strong>
+              <span className="muted small"> · not added to meal history</span>
+            </span>
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={undoSkip.busy}
+              onClick={() => undoSkip.run(promptSkipped.id)}
+            >
+              Undo
+            </button>
+          </div>
+        )}
+        {data?.has_menu &&
+          data.weekly_menu_id !== null &&
+          !current &&
+          !promptLogged &&
+          !promptSkipped &&
+          meals.data &&
+          skips.data && (
           <div className="stack">
             <p className="menu-question">
               <span aria-hidden>{MEAL_EMOJI[data.meal_type]}</span> {data.question}
@@ -199,8 +263,15 @@ function MenuPromptCard() {
               <button className="btn btn-ghost" onClick={() => navigate("/log")}>
                 No, I'll add a photo
               </button>
+              <button
+                className="btn btn-ghost"
+                disabled={skip.busy}
+                onClick={() => skip.run(data.meal_type)}
+              >
+                I skipped it
+              </button>
             </div>
-            <ErrorNote message={confirm.error} />
+            <ErrorNote message={confirm.error ?? skip.error} />
           </div>
         )}
         {data?.has_menu && current && (
@@ -226,7 +297,16 @@ function MenuPromptCard() {
           <ul className="today-menu">
             {todayMenu.data.map((menu) => {
               const isNow = data?.has_menu && data.meal_type === menu.meal_type;
-              const logged = live.get(menu.meal_type);
+              const loggedMeal = menuLoggedToday.get(menu.id) ?? live.get(menu.meal_type)?.meal;
+              const logged = loggedMeal !== undefined;
+              const skippedMeal = logged ? undefined : skipped.get(menu.meal_type);
+              const missed =
+                !logged &&
+                !skippedMeal &&
+                !isNow &&
+                meals.data &&
+                skips.data &&
+                mealWindowEnded(menu.meal_type, user.timezone, now);
               return (
                 <li key={menu.id} className={isNow ? "today-menu-now" : ""}>
                   <span aria-hidden>{MEAL_EMOJI[menu.meal_type]}</span>
@@ -237,10 +317,34 @@ function MenuPromptCard() {
                       {MEAL_TIMES[menu.meal_type] ? ` · ${MEAL_TIMES[menu.meal_type]}` : ""}
                     </span>
                   </span>
-                  {logged ? (
+                  {loggedMeal ? (
                     <span className="tag tag-now">Logged</span>
+                  ) : skippedMeal ? (
+                    <span className="row gap-xs">
+                      <span className="tag">Skipped</span>
+                      <button
+                        className="link small link-btn"
+                        disabled={undoSkip.busy}
+                        onClick={() => undoSkip.run(skippedMeal.id)}
+                      >
+                        Undo
+                      </button>
+                    </span>
                   ) : isNow ? (
                     <span className="tag tag-now">Now</span>
+                  ) : missed ? (
+                    <span className="row gap-sm missed-actions">
+                      <Link to="/menu" className="link small">
+                        Log it
+                      </Link>
+                      <button
+                        className="link small link-btn"
+                        disabled={skip.busy}
+                        onClick={() => skip.run(menu.meal_type)}
+                      >
+                        Skip
+                      </button>
+                    </span>
                   ) : (
                     <span className="muted small">{kcal(menu.total_calories)}</span>
                   )}
