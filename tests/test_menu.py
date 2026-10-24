@@ -56,6 +56,39 @@ def test_admin_can_create_and_list_weekly_menu(client, admin_auth_headers, auth_
     assert len(list_response.json()) == 1
 
 
+def test_get_menu_by_day_of_week(client, admin_auth_headers, auth_headers):
+    _create_tuesday_lunch_menu(client, admin_auth_headers)
+    breakfast = {
+        "day_of_week": "tuesday",
+        "meal_type": "breakfast",
+        "label": "Idli",
+        "items": [
+            {
+                "name": "idli",
+                "quantity_value": 2,
+                "quantity_unit": "piece",
+                "approx_calories": 120,
+            }
+        ],
+    }
+    client.put("/api/v1/menu/weekly", json=breakfast, headers=admin_auth_headers)
+
+    response = client.get("/api/v1/menu/weekly/tuesday", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert [m["meal_type"] for m in body] == ["breakfast", "lunch"]
+    assert all(m["day_name"] == "Tuesday" for m in body)
+
+    empty = client.get("/api/v1/menu/weekly/monday", headers=auth_headers)
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+
+def test_get_menu_by_invalid_day_returns_422(client, auth_headers):
+    response = client.get("/api/v1/menu/weekly/funday", headers=auth_headers)
+    assert response.status_code == 422
+
+
 def test_admin_put_upserts_same_day_mealtype(client, admin_auth_headers):
     _create_tuesday_lunch_menu(client, admin_auth_headers)
 

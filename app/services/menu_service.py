@@ -10,6 +10,7 @@ from app.core.constants import (
     MEAL_SOURCE_MENU_TEMPLATE,
     MEAL_STATUS_ANALYZED,
     MEAL_TYPE_TIME_RANGES,
+    DayOfWeek,
     MealType,
 )
 from app.core.exceptions import NotFoundError
@@ -42,6 +43,17 @@ def get_week_menu(db: Session) -> list[WeeklyMenu]:
             .order_by(WeeklyMenu.day_of_week, WeeklyMenu.meal_type)
         ).scalars()
     )
+
+
+def get_day_menu(db: Session, day_of_week: DayOfWeek) -> list[WeeklyMenu]:
+    menus = db.execute(
+        select(WeeklyMenu)
+        .options(selectinload(WeeklyMenu.items))
+        .where(WeeklyMenu.day_of_week == day_of_week)
+    ).scalars()
+    # Breakfast → lunch → dinner → snack, regardless of how the DB sorts enums.
+    meal_order = list(MealType)
+    return sorted(menus, key=lambda m: meal_order.index(m.meal_type))
 
 
 def create_or_replace_menu(db: Session, admin: User, payload: WeeklyMenuIn) -> WeeklyMenu:
