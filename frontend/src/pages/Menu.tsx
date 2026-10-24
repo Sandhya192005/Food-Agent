@@ -3,15 +3,23 @@ import { useState } from "react";
 import { Card, Empty, ErrorNote, Loading, PageHeader } from "../components/ui";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
-import { DAYS, kcal, label, MEAL_EMOJI, todayInZone } from "../lib/format";
-import { useAction, useQuery } from "../lib/hooks";
-import type { DayOfWeek, MealType, WeeklyMenu } from "../lib/types";
+import { DAYS, kcal, label, liveUntil, MEAL_EMOJI, todayInZone } from "../lib/format";
+import { useAction, useNow, useQuery } from "../lib/hooks";
+import type { DayOfWeek, MealSummary, MealType, WeeklyMenu } from "../lib/types";
 
 export function Menu() {
   const user = useUser();
   const today = todayInZone(user.timezone);
   const [day, setDay] = useState<DayOfWeek>(today);
   const { data, error, loading } = useQuery<WeeklyMenu[]>(`/menu/weekly/${day}`);
+  const now = useNow();
+  const meals = useQuery<MealSummary[]>("/meals?page_size=100");
+  // Office meals logged today that are still within their meal time.
+  const liveMenuIds = new Set(
+    (meals.data ?? [])
+      .filter((m) => m.weekly_menu_id !== null && liveUntil(m.captured_at, user.timezone, now))
+      .map((m) => m.weekly_menu_id),
+  );
   const [logged, setLogged] = useState<Record<string, string>>({});
 
   const confirm = useAction(async (mealType: MealType) => {
@@ -85,8 +93,8 @@ export function Menu() {
                   ))}
                 </ul>
                 {day === today ? (
-                  logged[key] ? (
-                    <p className="note note-success">{logged[key]}</p>
+                  logged[key] || liveMenuIds.has(menu.id) ? (
+                    <p className="note note-success">{logged[key] ?? "✅ Logged for today"}</p>
                   ) : (
                     <button
                       className="btn btn-primary"

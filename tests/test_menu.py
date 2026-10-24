@@ -164,6 +164,7 @@ def test_confirm_meal_from_menu_creates_meal_with_correct_totals(
     history = client.get("/api/v1/meals", headers=auth_headers)
     assert len(history.json()) == 1
     assert history.json()[0]["source"] == "menu_template"
+    assert history.json()[0]["weekly_menu_id"] == weekly_menu_id
 
 
 def test_confirm_meal_from_menu_by_day_and_meal_type(client, admin_auth_headers, auth_headers):

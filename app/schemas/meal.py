@@ -58,6 +58,7 @@ class MealSummaryOut(BaseModel):
     total_calories: float | None
     status: str
     source: str
+    weekly_menu_id: int | None = None
     captured_at: datetime
     warnings: list[str]
 
@@ -68,6 +69,7 @@ class MealSummaryOut(BaseModel):
             total_calories=meal.total_calories,
             status=meal.status,
             source=meal.source,
+            weekly_menu_id=meal.weekly_menu_id,
             captured_at=meal.captured_at,
             warnings=[meal.analysis_warning] if meal.analysis_warning else [],
         )

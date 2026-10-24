@@ -83,6 +83,7 @@ export interface MealSummary {
   total_calories: number | null;
   status: string;
   source: string;
+  weekly_menu_id: number | null;
   captured_at: string;
   warnings: string[];
 }

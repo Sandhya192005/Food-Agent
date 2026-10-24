@@ -48,6 +48,16 @@ export function useQuery<T>(path: string | null): Query<T> {
 
 type ActionResult<R> = { ok: true; value: R } | { ok: false };
 
+/** Current time, refreshed every `everyMs` so time-based UI (live meals) updates. */
+export function useNow(everyMs = 30_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), everyMs);
+    return () => window.clearInterval(timer);
+  }, [everyMs]);
+  return now;
+}
+
 /** Wraps a one-off action (POST/PATCH/DELETE) with busy and error state. */
 export function useAction<A extends unknown[], R>(fn: (...args: A) => Promise<R>) {
   const [busy, setBusy] = useState(false);

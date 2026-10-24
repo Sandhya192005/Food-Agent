@@ -981,3 +981,40 @@ legend {
     transition: none !important;
   }
 }
+
+/* Live meals: logged, still inside their meal window */
+.live-meal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+.live-meal:hover {
+  border-color: var(--accent-strong);
+}
+.live-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent);
+  animation: live-pulse 1.8s ease-out infinite;
+}
+@keyframes live-pulse {
+  70% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+.live-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}

@@ -9,6 +9,7 @@ import {
   grams,
   kcal,
   label,
+  liveUntil,
   localDateKey,
   MEAL_EMOJI,
   MEAL_TIMES,
@@ -16,10 +17,11 @@ import {
   parseDate,
   todayInZone,
 } from "../lib/format";
-import { useAction, useQuery } from "../lib/hooks";
+import { useAction, useNow, useQuery } from "../lib/hooks";
 import type {
   MealDetail,
   MealSummary,
+  MealType,
   MenuPrompt,
   Recommendation,
   WeeklyMenu,
@@ -136,12 +138,15 @@ function TodayIntakeCard() {
   );
 }
 
-/** Today's office menu. During a meal window it also asks "Is your lunch going to
- *  be …?" — Yes logs it, No goes to photo upload. */
+/** Today's office menu. During a meal window it asks "Is your lunch going to be …?"
+ *  (Yes logs it, No goes to photo upload). Once logged, the meal stays "live" here
+ *  until the meal window ends, then moves to meal history. */
 function MenuPromptCard() {
   const user = useUser();
+  const now = useNow();
   const { data, error, loading, reload } = useQuery<MenuPrompt>("/menu/today-prompt");
   const todayMenu = useQuery<WeeklyMenu[]>(`/menu/weekly/${todayInZone(user.timezone)}`);
+  const meals = useQuery<MealSummary[]>("/meals?page_size=100");
   const navigate = useNavigate();
 
   // The current meal depends on the clock, so re-check every minute.
@@ -149,15 +154,22 @@ function MenuPromptCard() {
     const timer = window.setInterval(reload, 60_000);
     return () => window.clearInterval(timer);
   }, [reload]);
-  const [done, setDone] = useState<string | null>(null);
+
   const confirm = useAction(async (weeklyMenuId: number) => {
-    const meal = await api<{ total_calories: number }>("/meals/confirm-from-menu", {
+    await api("/meals/confirm-from-menu", {
       method: "POST",
       json: { weekly_menu_id: weeklyMenuId },
     });
-    setDone(`Logged — ${kcal(meal.total_calories)}.`);
     notifyDataChanged();
   });
+
+  // Meals still inside their meal window, keyed by meal type.
+  const live = new Map<MealType, { meal: MealSummary; endLabel: string }>();
+  for (const meal of meals.data ?? []) {
+    const info = liveUntil(meal.captured_at, user.timezone, now);
+    if (info && !live.has(info.mealType)) live.set(info.mealType, { meal, endLabel: info.endLabel });
+  }
+  const current = data?.has_menu ? live.get(data.meal_type) : undefined;
 
   return (
     <Card
@@ -171,18 +183,15 @@ function MenuPromptCard() {
       {loading && !data && <Loading />}
       <ErrorNote message={error?.message ?? todayMenu.error?.message} />
       <div className="stack">
-      {data?.has_menu && data.weekly_menu_id !== null && (
-        <div className="stack">
-          <p className="menu-question">
-            <span aria-hidden>{MEAL_EMOJI[data.meal_type]}</span> {data.question}
-          </p>
-          {done ? (
-            <p className="note note-success">{done}</p>
-          ) : (
+        {data?.has_menu && data.weekly_menu_id !== null && !current && (
+          <div className="stack">
+            <p className="menu-question">
+              <span aria-hidden>{MEAL_EMOJI[data.meal_type]}</span> {data.question}
+            </p>
             <div className="row gap-sm">
               <button
                 className="btn btn-primary"
-                disabled={confirm.busy}
+                disabled={confirm.busy || meals.loading}
                 onClick={() => confirm.run(data.weekly_menu_id!)}
               >
                 Yes, log it
@@ -191,39 +200,55 @@ function MenuPromptCard() {
                 No, I'll add a photo
               </button>
             </div>
-          )}
-          <ErrorNote message={confirm.error} />
-        </div>
-      )}
-      {todayMenu.data && todayMenu.data.length === 0 && (
-        <Empty icon="📅">
-          <p>No office meals today.</p>
-        </Empty>
-      )}
-      {todayMenu.data && todayMenu.data.length > 0 && (
-        <ul className="today-menu">
-          {todayMenu.data.map((menu) => {
-            const isNow = data?.has_menu && data.meal_type === menu.meal_type;
-            return (
-              <li key={menu.id} className={isNow ? "today-menu-now" : ""}>
-                <span aria-hidden>{MEAL_EMOJI[menu.meal_type]}</span>
-                <span className="today-menu-main">
-                  <strong>{menu.label}</strong>
-                  <span className="muted small">
-                    {label(menu.meal_type)}
-                    {MEAL_TIMES[menu.meal_type] ? ` · ${MEAL_TIMES[menu.meal_type]}` : ""}
+            <ErrorNote message={confirm.error} />
+          </div>
+        )}
+        {data?.has_menu && current && (
+          <Link to={`/meals/${current.meal.id}`} className="live-meal">
+            <span className="live-dot" aria-hidden />
+            <span className="today-menu-main">
+              <strong>
+                ✅ {label(data.meal_type)} logged · {kcal(current.meal.total_calories)}
+              </strong>
+              <span className="muted small">
+                Live until {current.endLabel}, then it moves to meal history
+              </span>
+            </span>
+            <span aria-hidden>›</span>
+          </Link>
+        )}
+        {todayMenu.data && todayMenu.data.length === 0 && (
+          <Empty icon="📅">
+            <p>No office meals today.</p>
+          </Empty>
+        )}
+        {todayMenu.data && todayMenu.data.length > 0 && (
+          <ul className="today-menu">
+            {todayMenu.data.map((menu) => {
+              const isNow = data?.has_menu && data.meal_type === menu.meal_type;
+              const logged = live.get(menu.meal_type);
+              return (
+                <li key={menu.id} className={isNow ? "today-menu-now" : ""}>
+                  <span aria-hidden>{MEAL_EMOJI[menu.meal_type]}</span>
+                  <span className="today-menu-main">
+                    <strong>{menu.label}</strong>
+                    <span className="muted small">
+                      {label(menu.meal_type)}
+                      {MEAL_TIMES[menu.meal_type] ? ` · ${MEAL_TIMES[menu.meal_type]}` : ""}
+                    </span>
                   </span>
-                </span>
-                {isNow ? (
-                  <span className="tag tag-now">Now</span>
-                ) : (
-                  <span className="muted small">{kcal(menu.total_calories)}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  {logged ? (
+                    <span className="tag tag-now">Logged</span>
+                  ) : isNow ? (
+                    <span className="tag tag-now">Now</span>
+                  ) : (
+                    <span className="muted small">{kcal(menu.total_calories)}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </Card>
   );

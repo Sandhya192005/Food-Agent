@@ -5,8 +5,8 @@ import { MealItems, SOURCE_LABEL, Warnings } from "../components/MealItems";
 import { Card, Empty, ErrorNote, Loading, PageHeader } from "../components/ui";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
-import { formatDateTime, kcal, localDateKey, parseDate } from "../lib/format";
-import { useAction, useQuery } from "../lib/hooks";
+import { formatDateTime, kcal, liveUntil, localDateKey, parseDate } from "../lib/format";
+import { useAction, useNow, useQuery } from "../lib/hooks";
 import type { MealDetail as MealDetailType, MealSummary } from "../lib/types";
 
 const PAGE_SIZE = 20;
@@ -14,8 +14,15 @@ const PAGE_SIZE = 20;
 export function Meals() {
   const user = useUser();
   const [page, setPage] = useState(1);
-  const { data, error, loading } = useQuery<MealSummary[]>(
+  const now = useNow();
+  const { data: allMeals, error, loading } = useQuery<MealSummary[]>(
     `/meals?page=${page}&page_size=${PAGE_SIZE}`,
+  );
+  // Meals still inside their meal window live on the Today page until it ends.
+  const liveCount = (allMeals ?? []).filter((m) => liveUntil(m.captured_at, user.timezone, now)).length;
+  const data = useMemo(
+    () => allMeals?.filter((m) => !liveUntil(m.captured_at, user.timezone, now)) ?? null,
+    [allMeals, user.timezone, now],
   );
 
   // Group by local day: "Today", "Yesterday", or a date.
@@ -56,7 +63,13 @@ export function Meals() {
       />
       {loading && !data && <Loading />}
       <ErrorNote message={error?.message} />
-      {data && data.length === 0 && page === 1 && (
+      {liveCount > 0 && (
+        <p className="note live-note">
+          <span className="live-dot" aria-hidden /> {liveCount} meal{liveCount > 1 ? "s are" : " is"}{" "}
+          live on the <Link to="/">Today</Link> page and will show here when the meal time ends.
+        </p>
+      )}
+      {data && data.length === 0 && page === 1 && liveCount === 0 && (
         <Card>
           <Empty icon="🍽️">
             <p>No meals logged yet.</p>
@@ -89,7 +102,7 @@ export function Meals() {
           </Card>
         ))}
       </div>
-      {data && (page > 1 || data.length === PAGE_SIZE) && (
+      {allMeals && (page > 1 || allMeals.length === PAGE_SIZE) && (
         <div className="row gap-sm center-row">
           <button className="btn btn-ghost" disabled={page === 1} onClick={() => setPage(page - 1)}>
             ← Newer
@@ -97,7 +110,7 @@ export function Meals() {
           <span className="muted small">Page {page}</span>
           <button
             className="btn btn-ghost"
-            disabled={data.length < PAGE_SIZE}
+            disabled={allMeals.length < PAGE_SIZE}
             onClick={() => setPage(page + 1)}
           >
             Older →
