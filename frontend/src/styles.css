@@ -619,6 +619,38 @@ legend {
   font-size: 1.05rem;
   font-weight: 500;
 }
+.today-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.today-menu li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+}
+.today-menu li > span:first-child {
+  font-size: 1.3rem;
+}
+.today-menu-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.today-menu-now {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+.tag-now {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 .suggestion-mini {
   display: flex;
   justify-content: space-between;

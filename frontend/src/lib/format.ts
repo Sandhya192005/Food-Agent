@@ -17,6 +17,13 @@ export const MEAL_EMOJI: Record<MealType, string> = {
   snack: "🥜",
 };
 
+// Matches MEAL_TYPE_TIME_RANGES in app/core/constants.py (user's local time).
+export const MEAL_TIMES: Partial<Record<MealType, string>> = {
+  breakfast: "9–11 AM",
+  lunch: "1:30–3 PM",
+  dinner: "7:30–9 PM",
+};
+
 /** "non_veg" → "Non veg" */
 export function label(value: string): string {
   const text = value.replace(/_/g, " ");

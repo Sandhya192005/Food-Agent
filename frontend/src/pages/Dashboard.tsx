@@ -5,9 +5,25 @@ import { Bar, Card, Empty, ErrorNote, Loading, PageHeader } from "../components/
 import { WaterCard } from "../components/WaterCard";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
-import { grams, kcal, label, localDateKey, MEAL_EMOJI, money, parseDate } from "../lib/format";
+import {
+  grams,
+  kcal,
+  label,
+  localDateKey,
+  MEAL_EMOJI,
+  MEAL_TIMES,
+  money,
+  parseDate,
+  todayInZone,
+} from "../lib/format";
 import { useAction, useQuery } from "../lib/hooks";
-import type { MealDetail, MealSummary, MenuPrompt, Recommendation } from "../lib/types";
+import type {
+  MealDetail,
+  MealSummary,
+  MenuPrompt,
+  Recommendation,
+  WeeklyMenu,
+} from "../lib/types";
 
 export function Dashboard() {
   const user = useUser();
@@ -120,10 +136,19 @@ function TodayIntakeCard() {
   );
 }
 
-/** "Is your lunch going to be Sambar with Potato?" — Yes logs it, No goes to photo upload. */
+/** Today's office menu. During a meal window it also asks "Is your lunch going to
+ *  be …?" — Yes logs it, No goes to photo upload. */
 function MenuPromptCard() {
-  const { data, error, loading } = useQuery<MenuPrompt>("/menu/today-prompt");
+  const user = useUser();
+  const { data, error, loading, reload } = useQuery<MenuPrompt>("/menu/today-prompt");
+  const todayMenu = useQuery<WeeklyMenu[]>(`/menu/weekly/${todayInZone(user.timezone)}`);
   const navigate = useNavigate();
+
+  // The current meal depends on the clock, so re-check every minute.
+  useEffect(() => {
+    const timer = window.setInterval(reload, 60_000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
   const [done, setDone] = useState<string | null>(null);
   const confirm = useAction(async (weeklyMenuId: number) => {
     const meal = await api<{ total_calories: number }>("/meals/confirm-from-menu", {
@@ -144,15 +169,8 @@ function MenuPromptCard() {
       }
     >
       {loading && !data && <Loading />}
-      <ErrorNote message={error?.message} />
-      {data && !data.has_menu && (
-        <Empty icon={MEAL_EMOJI[data.meal_type]}>
-          <p>No office meal scheduled right now.</p>
-          <p className="muted small">
-            {data.day_name} · {label(data.meal_type)}
-          </p>
-        </Empty>
-      )}
+      <ErrorNote message={error?.message ?? todayMenu.error?.message} />
+      <div className="stack">
       {data?.has_menu && data.weekly_menu_id !== null && (
         <div className="stack">
           <p className="menu-question">
@@ -177,6 +195,36 @@ function MenuPromptCard() {
           <ErrorNote message={confirm.error} />
         </div>
       )}
+      {todayMenu.data && todayMenu.data.length === 0 && (
+        <Empty icon="📅">
+          <p>No office meals today.</p>
+        </Empty>
+      )}
+      {todayMenu.data && todayMenu.data.length > 0 && (
+        <ul className="today-menu">
+          {todayMenu.data.map((menu) => {
+            const isNow = data?.has_menu && data.meal_type === menu.meal_type;
+            return (
+              <li key={menu.id} className={isNow ? "today-menu-now" : ""}>
+                <span aria-hidden>{MEAL_EMOJI[menu.meal_type]}</span>
+                <span className="today-menu-main">
+                  <strong>{menu.label}</strong>
+                  <span className="muted small">
+                    {label(menu.meal_type)}
+                    {MEAL_TIMES[menu.meal_type] ? ` · ${MEAL_TIMES[menu.meal_type]}` : ""}
+                  </span>
+                </span>
+                {isNow ? (
+                  <span className="tag tag-now">Now</span>
+                ) : (
+                  <span className="muted small">{kcal(menu.total_calories)}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      </div>
     </Card>
   );
 }
