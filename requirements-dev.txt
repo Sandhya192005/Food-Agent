@@ -6,3 +6,4 @@ ruff>=0.7,<0.8
 mypy>=1.13,<1.14
 faker>=30.0,<31.0
 freezegun>=1.5,<1.6
+moto[s3]>=5.0,<6.0  # fake S3 for tests

@@ -97,6 +97,56 @@ directly against the database:
 UPDATE users SET is_admin = true WHERE email = 'someone@example.com';
 ```
 
+### Storing meal photos in AWS S3
+
+By default photos are saved in `media/`. To save new photos in S3 instead:
+
+1. **Create a bucket** (S3 console → Create bucket). Keep **Block all public
+   access** on: the app never makes photos public.
+2. **Create an IAM user** for the app (IAM → Users → Create user) and attach this
+   policy, so its keys can only touch that one bucket:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+         "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
+       },
+       {
+         "Effect": "Allow",
+         "Action": "s3:ListBucket",
+         "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME"
+       }
+     ]
+   }
+   ```
+
+   `ListBucket` lets S3 answer "no such file" for a deleted photo; without it S3
+   answers "access denied" instead.
+
+3. Create an **access key** for that user (Security credentials → Create access key).
+4. Put these in `.env` and restart the backend:
+
+   ```
+   STORAGE_BACKEND=s3
+   S3_BUCKET_NAME=your-bucket-name
+   AWS_REGION=ap-south-1
+   AWS_ACCESS_KEY_ID=...
+   AWS_SECRET_ACCESS_KEY=...
+   ```
+
+How it works:
+
+- **Upload:** each photo goes to `meals/user-<id>/<random>.jpg` in the bucket.
+- **Database:** that object key goes in `meals.image_key`, and `meals.image_storage` records `s3`.
+- **Viewing:** `GET /meals/{id}` returns `image_url`, a presigned link that works for 15 minutes, and the browser loads the photo straight from S3.
+- **Fallback:** `GET /meals/{id}/image` serves the photo through the API.
+- **Delete:** deleting a meal also deletes its photo from S3.
+- **Older photos:** photos saved before the switch stay in `media/` (`image_storage = local`) and still show.
+
 ## Running with Docker
 
 ```

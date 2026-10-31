@@ -14,3 +14,4 @@ python-dotenv>=1.0,<1.1
 tzdata>=2024.2  # zoneinfo has no system tz database on Windows; this supplies it
 psycopg2-binary>=2.9,<2.10
 apscheduler>=3.10,<3.11
+boto3>=1.35,<2.0  # AWS S3 storage for meal photos (STORAGE_BACKEND=s3)

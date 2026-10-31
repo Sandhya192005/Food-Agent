@@ -221,7 +221,7 @@ def confirm_meal_from_menu(
 
     meal = Meal(
         user_id=user.id,
-        image_path=None,
+        image_key=None,
         image_hash=None,
         source=MEAL_SOURCE_MENU_TEMPLATE,
         weekly_menu_id=menu.id,

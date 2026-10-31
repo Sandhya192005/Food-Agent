@@ -94,6 +94,10 @@ export interface MealSummary {
 
 export interface MealDetail extends MealSummary {
   items: MealItem[];
+  /** True for meals logged with a photo. */
+  has_image: boolean;
+  /** Short-lived S3 link to the photo; null when it's on local disk (use /meals/{id}/image). */
+  image_url: string | null;
 }
 
 /** A meal the user skipped. Stored apart from meals, so not in history. */

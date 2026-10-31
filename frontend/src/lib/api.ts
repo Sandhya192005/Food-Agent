@@ -91,7 +91,8 @@ interface RequestOptions {
   auth?: boolean;
 }
 
-export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+/** Sends the request, renewing the access token once on a 401. */
+async function request(path: string, options: RequestOptions = {}): Promise<Response> {
   const { method = "GET", json, form, auth = true } = options;
 
   const send = () => {
@@ -121,6 +122,18 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   } catch {
     throw new ApiError("Can't reach the server. Is the backend running?", 0, "network_error");
   }
+  return res;
+}
+
+/** For files such as meal photos: an <img> can't send the login token, so fetch it here. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await request(path);
+  if (!res.ok) throw new ApiError(`Request failed (${res.status})`, res.status, "unknown_error");
+  return res.blob();
+}
+
+export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const res = await request(path, options);
 
   if (res.status === 204) return undefined as T;
 

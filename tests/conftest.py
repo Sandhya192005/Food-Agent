@@ -21,6 +21,8 @@ from app.main import app
 from app.models.user import User
 from app.schemas.user import SignupRequest
 from app.services import auth_service
+from app.services.storage import factory
+from app.services.storage.local import LocalFilesystemStorage
 
 TEST_DB_PATH = Path(__file__).parent / "test.db"
 TEST_DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"
@@ -36,6 +38,14 @@ def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:
 
 
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def photo_storage(tmp_path, monkeypatch):
+    """Save meal photos to a temp folder, never the real media/ folder or S3."""
+    storage = LocalFilesystemStorage(str(tmp_path / "media"))
+    monkeypatch.setattr(factory, "get_storage", lambda name: storage)
+    return storage
 
 
 @pytest.fixture()

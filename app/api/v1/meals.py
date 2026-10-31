@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -10,7 +10,7 @@ from app.schemas.meal import MealAnalyzeResponse, MealDetailOut, MealSummaryOut
 from app.schemas.menu import MenuConfirmRequest
 from app.services import meal_service, menu_service
 from app.services.storage.base import StorageBackend
-from app.services.storage.local import get_storage_backend
+from app.services.storage.factory import get_storage_backend
 from app.services.timezone_utils import user_timezone
 
 router = APIRouter(prefix="/meals", tags=["meals"])
@@ -88,7 +88,28 @@ def get_meal(
     db: Session = Depends(get_db),
 ) -> MealDetailOut:
     meal = meal_service.get_meal(db, current_user, meal_id)
-    return MealDetailOut.from_model(meal, user_timezone(current_user))
+    return MealDetailOut.from_model(
+        meal, user_timezone(current_user), image_url=meal_service.meal_image_url(meal)
+    )
+
+
+@router.get(
+    "/{meal_id}/image",
+    summary="Get a meal's photo",
+    description="Returns the photo itself (from S3 or local disk). Use the detail's "
+    "`image_url` when it's set: the browser then loads it straight from S3.",
+    responses={200: {"content": {"image/*": {}}}},
+)
+def get_meal_image(
+    meal_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, content_type = meal_service.get_meal_image(db, current_user, meal_id)
+    # Private: the photo belongs to this user, so shared caches mustn't keep it.
+    return Response(
+        content, media_type=content_type, headers={"Cache-Control": "private, max-age=300"}
+    )
 
 
 @router.delete(
@@ -96,12 +117,11 @@ def get_meal(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a meal",
     description="Soft-deletes the meal for audit/history purposes (marked deleted, "
-    "hidden from history, but the record is kept) and removes its stored image file.",
+    "hidden from history, but the record is kept) and removes its stored photo.",
 )
 def delete_meal(
     meal_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    storage: StorageBackend = Depends(get_storage_backend),
 ) -> None:
-    meal_service.delete_meal(db, current_user, storage, meal_id)
+    meal_service.delete_meal(db, current_user, meal_id)

@@ -1,4 +1,5 @@
 import json
+import mimetypes
 from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import select
@@ -11,6 +12,7 @@ from app.models.user import User
 from app.schemas.meal import MealAnalyzeResponse, MealItemOut
 from app.services import meal_validation
 from app.services.ai import vision_service
+from app.services.storage import factory
 from app.services.storage.base import StorageBackend
 from app.services.timezone_utils import user_timezone
 
@@ -52,12 +54,15 @@ def analyze_and_store_meal(
     raw_items = vision_service.analyze_food_image(raw_bytes)
     checked_items, warnings = meal_validation.apply_sanity_checks(raw_items)
 
-    image_path = storage.save(raw_bytes, filename)
+    image_key = storage.save(
+        raw_bytes, filename, folder=f"meals/user-{user.id}", content_type=content_type
+    )
     total_calories = round(sum(i.approx_calories for i in checked_items), 1)
 
     meal = Meal(
         user_id=user.id,
-        image_path=image_path,
+        image_key=image_key,
+        image_storage=storage.name,
         image_hash=image_hash,
         status=MEAL_STATUS_ANALYZED,
         total_calories=total_calories,
@@ -89,7 +94,13 @@ def analyze_and_store_meal(
     ]
 
     db.add(meal)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        # Don't leave an orphan photo behind if the meal couldn't be saved.
+        db.rollback()
+        storage.delete(image_key)
+        raise
     db.refresh(meal)
 
     return to_response(meal, warnings, is_duplicate=False)
@@ -129,13 +140,43 @@ def get_meal(db: Session, user: User, meal_id: int) -> Meal:
     return meal
 
 
-def delete_meal(db: Session, user: User, storage: StorageBackend, meal_id: int) -> None:
+def _photo_storage(meal: Meal) -> StorageBackend | None:
+    """The storage holding this meal's photo, or None if it has no photo."""
+    if meal.image_key is None:
+        return None
+    # Meals saved before image_storage existed have their photo on local disk.
+    return factory.get_storage(meal.image_storage or "local")
+
+
+def meal_image_url(meal: Meal) -> str | None:
+    """A temporary link to the photo (S3 presigned URL), or None when there's no
+    photo or the storage can't make links (local disk: use GET /meals/{id}/image)."""
+    storage = _photo_storage(meal)
+    return storage.url_for(meal.image_key) if storage else None
+
+
+def get_meal_image(db: Session, user: User, meal_id: int) -> tuple[bytes, str]:
+    """The photo's bytes and content type, e.g. (b"...", "image/jpeg")."""
+    meal = get_meal(db, user, meal_id)
+    storage = _photo_storage(meal)
+    if storage is None:
+        raise NotFoundError("This meal has no photo", code="meal_image_not_found")
+    try:
+        content = storage.read(meal.image_key)
+    except FileNotFoundError:
+        raise NotFoundError("The photo file is missing", code="meal_image_not_found") from None
+    content_type = mimetypes.guess_type(meal.image_key)[0] or "image/jpeg"
+    return content, content_type
+
+
+def delete_meal(db: Session, user: User, meal_id: int) -> None:
     """Soft-deletes for audit/history purposes: the row and its meal items stay in the
-    database (marked deleted_at/deleted_by/is_active), only the stored image file is
+    database (marked deleted_at/deleted_by/is_active), only the stored photo is
     actually removed - "who deleted this, and when" remains queryable after this."""
     meal = get_meal(db, user, meal_id)
-    if meal.image_path is not None:
-        storage.delete(meal.image_path)
+    storage = _photo_storage(meal)
+    if storage is not None:
+        storage.delete(meal.image_key)
     meal.deleted_at = datetime.now(UTC)
     meal.deleted_by = user.id
     meal.is_active = False

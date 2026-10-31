@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,8 +20,20 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./data/food_agent.db"
 
-    # Storage
+    # Storage: where new meal photos are saved. "local" = MEDIA_ROOT folder,
+    # "s3" = an AWS S3 bucket. Each meal remembers where its photo went, so
+    # switching only affects new uploads.
+    STORAGE_BACKEND: Literal["local", "s3"] = "local"
     MEDIA_ROOT: str = "./media"
+
+    # AWS S3 (only used when STORAGE_BACKEND=s3)
+    S3_BUCKET_NAME: str = ""
+    AWS_REGION: str = "ap-south-1"
+    # Leave empty to use boto3's normal lookup (~/.aws/credentials, IAM role, ...).
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    # How long a photo link from GET /meals/{id} keeps working.
+    S3_PRESIGNED_URL_EXPIRE_SECONDS: int = 900
 
     # Tokens
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -47,6 +60,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["dev", "test", "prod"] = "dev"
     CORS_ORIGINS: str = ""
     LOG_LEVEL: str = "INFO"
+
+    @model_validator(mode="after")
+    def _check_s3(self) -> "Settings":
+        if self.STORAGE_BACKEND == "s3" and not self.S3_BUCKET_NAME:
+            raise ValueError("S3_BUCKET_NAME must be set when STORAGE_BACKEND=s3")
+        return self
 
     @staticmethod
     def _split(value: str) -> list[str]:
