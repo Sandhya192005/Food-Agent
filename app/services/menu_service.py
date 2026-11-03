@@ -10,6 +10,7 @@ from app.core.constants import (
     MEAL_SOURCE_MENU_TEMPLATE,
     MEAL_STATUS_ANALYZED,
     MEAL_TYPE_TIME_RANGES,
+    DayOfWeek,
     MealType,
 )
 from app.core.exceptions import NotFoundError
@@ -17,7 +18,7 @@ from app.models.meal import Meal, MealItem
 from app.models.menu import WeeklyMenu, WeeklyMenuItem
 from app.models.user import User
 from app.schemas.meal import MealAnalyzeResponse
-from app.schemas.menu import MenuPromptOut, WeeklyMenuIn
+from app.schemas.menu import MenuConfirmRequest, MenuPromptOut, WeeklyMenuIn
 from app.services import meal_service, meal_validation
 from app.services.meal_validation import RawFoodItem
 from app.services.timezone_utils import user_timezone
@@ -34,6 +35,20 @@ def _get_menu_with_items(db: Session, weekly_menu_id: int) -> WeeklyMenu:
     return menu
 
 
+def get_menu_for_slot(db: Session, day_of_week: DayOfWeek, meal_type: MealType) -> WeeklyMenu:
+    menu = db.execute(
+        select(WeeklyMenu)
+        .options(selectinload(WeeklyMenu.items))
+        .where(WeeklyMenu.day_of_week == day_of_week, WeeklyMenu.meal_type == meal_type)
+    ).scalar_one_or_none()
+    if menu is None:
+        raise NotFoundError(
+            f"No {meal_type.value} menu set for {DAY_OF_WEEK_DISPLAY[day_of_week]}",
+            code="menu_not_found",
+        )
+    return menu
+
+
 def get_week_menu(db: Session) -> list[WeeklyMenu]:
     return list(
         db.execute(
@@ -42,6 +57,17 @@ def get_week_menu(db: Session) -> list[WeeklyMenu]:
             .order_by(WeeklyMenu.day_of_week, WeeklyMenu.meal_type)
         ).scalars()
     )
+
+
+def get_day_menu(db: Session, day_of_week: DayOfWeek) -> list[WeeklyMenu]:
+    menus = db.execute(
+        select(WeeklyMenu)
+        .options(selectinload(WeeklyMenu.items))
+        .where(WeeklyMenu.day_of_week == day_of_week)
+    ).scalars()
+    # Breakfast → lunch → dinner → snack, regardless of how the DB sorts enums.
+    meal_order = list(MealType)
+    return sorted(menus, key=lambda m: meal_order.index(m.meal_type))
 
 
 def create_or_replace_menu(db: Session, admin: User, payload: WeeklyMenuIn) -> WeeklyMenu:
@@ -143,8 +169,14 @@ def get_today_prompt(db: Session, user: User, meal_type: MealType | None) -> Men
     )
 
 
-def confirm_meal_from_menu(db: Session, user: User, weekly_menu_id: int) -> MealAnalyzeResponse:
-    menu = _get_menu_with_items(db, weekly_menu_id)
+def confirm_meal_from_menu(
+    db: Session, user: User, payload: MenuConfirmRequest
+) -> MealAnalyzeResponse:
+    if payload.weekly_menu_id is not None:
+        menu = _get_menu_with_items(db, payload.weekly_menu_id)
+    else:
+        assert payload.day_of_week is not None and payload.meal_type is not None
+        menu = get_menu_for_slot(db, payload.day_of_week, payload.meal_type)
 
     raw_items = [
         RawFoodItem(

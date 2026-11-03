@@ -1,5 +1,3 @@
-from datetime import UTC, datetime, time
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -8,16 +6,8 @@ from app.db.base import ensure_utc
 from app.models.user import User
 from app.models.water import WaterLog, WaterReminderSnooze
 from app.schemas.water import WaterLogRequest, WaterReminderOut, WaterTodayOut
-from app.services.timezone_utils import user_timezone
+from app.services.timezone_utils import local_day_bounds_utc
 from app.services.water_goals import next_snooze_until, reminder_message, should_remind
-
-
-def _local_day_bounds_utc(user: User, now: datetime | None = None) -> tuple[datetime, datetime]:
-    tz = user_timezone(user)
-    now_local = (now or datetime.now(UTC)).astimezone(tz)
-    start_local = datetime.combine(now_local.date(), time.min, tzinfo=tz)
-    end_local = datetime.combine(now_local.date(), time.max, tzinfo=tz)
-    return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
 def log_water(db: Session, user: User, payload: WaterLogRequest) -> WaterLog:
@@ -43,7 +33,7 @@ def log_water(db: Session, user: User, payload: WaterLogRequest) -> WaterLog:
 
 
 def get_today_summary(db: Session, user: User) -> WaterTodayOut:
-    start_utc, end_utc = _local_day_bounds_utc(user)
+    start_utc, end_utc = local_day_bounds_utc(user)
     consumed_ml = (
         db.execute(
             select(func.coalesce(func.sum(WaterLog.amount_ml), 0)).where(

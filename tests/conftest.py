@@ -3,6 +3,10 @@ from pathlib import Path
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-placeholder")
+os.environ.setdefault("ENVIRONMENT", "test")
+# Pin reminder timings so a local .env tuned for manual testing can't break tests.
+os.environ["WATER_REMINDER_THRESHOLD_MINUTES"] = "90"
+os.environ["WATER_SNOOZE_MINUTES"] = "60"
 
 import pytest
 from fastapi.testclient import TestClient

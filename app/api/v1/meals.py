@@ -47,7 +47,8 @@ async def analyze_meal(
     summary="Log today's meal from the recurring office menu",
     description="Called when the user taps 'Yes' on the GET /menu/today-prompt "
     "question. Uses the office menu's stored nutrition data to create the meal "
-    "record directly, without an AI vision call or photo upload. If the user taps "
+    "record directly, without an AI vision call or photo upload. Pick the menu by "
+    "day_of_week + meal_type (e.g. tuesday + lunch), or by weekly_menu_id. If the user taps "
     "'No' instead, call POST /meals/analyze with a photo as usual.",
 )
 def confirm_meal_from_menu(
@@ -55,7 +56,7 @@ def confirm_meal_from_menu(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MealAnalyzeResponse:
-    return menu_service.confirm_meal_from_menu(db, current_user, payload.weekly_menu_id)
+    return menu_service.confirm_meal_from_menu(db, current_user, payload)
 
 
 @router.get("", response_model=list[MealSummaryOut], summary="List meal history")
