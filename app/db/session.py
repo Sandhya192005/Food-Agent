@@ -7,7 +7,9 @@ from app.core.config import settings
 
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+# pool_pre_ping: check a pooled connection still works before using it, so the app
+# reconnects quietly when a remote database (e.g. AWS RDS) closes idle connections.
+engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 if engine.dialect.name.startswith("sqlite"):
