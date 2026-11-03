@@ -5,6 +5,7 @@ from PIL import Image
 
 from app.services.ai import vision_service
 from app.services.meal_validation import RawFoodItem
+from app.services.storage import factory
 
 
 def _jpeg_bytes(color=(200, 150, 100)) -> bytes:
@@ -144,6 +145,107 @@ def test_meal_not_found_for_other_users_meal(client, auth_headers, mock_vision):
 
     response = client.get(f"/api/v1/meals/{meal_id}", headers=other_headers)
     assert response.status_code == 404
+    # Nor can they fetch its photo.
+    response = client.get(f"/api/v1/meals/{meal_id}/image", headers=other_headers)
+    assert response.status_code == 404
+
+
+def test_meal_photo_is_stored_and_can_be_fetched(
+    client, auth_headers, mock_vision, photo_storage, db_session
+):
+    from app.models.meal import Meal
+
+    photo = _jpeg_bytes()
+    upload = client.post(
+        "/api/v1/meals/analyze",
+        headers=auth_headers,
+        files={"file": ("meal.jpg", photo, "image/jpeg")},
+    )
+    meal_id = upload.json()["meal_id"]
+
+    # The database keeps the photo's key and which storage holds it.
+    meal = db_session.get(Meal, meal_id)
+    assert meal.image_storage == "local"
+    assert meal.image_key.startswith(f"meals/user-{meal.user_id}/")
+    assert meal.image_key.endswith(".jpg")
+
+    detail = client.get(f"/api/v1/meals/{meal_id}", headers=auth_headers).json()
+    assert detail["has_image"] is True
+    assert detail["image_url"] is None  # local disk has no direct link
+
+    image = client.get(f"/api/v1/meals/{meal_id}/image", headers=auth_headers)
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content == photo
+
+    # Deleting the meal removes the photo too.
+    client.delete(f"/api/v1/meals/{meal_id}", headers=auth_headers)
+    assert not (photo_storage.root / meal.image_key).exists()
+
+
+def test_meal_detail_uses_s3_link_for_s3_photos(
+    client, auth_headers, mock_vision, monkeypatch, db_session
+):
+    from app.models.meal import Meal
+    from app.services.storage.base import StorageBackend
+
+    class FakeS3(StorageBackend):
+        name = "s3"
+
+        def __init__(self):
+            self.objects = {}
+
+        def save(self, content, filename, *, folder="", content_type=None):
+            key = f"{folder}/abc.jpg"
+            self.objects[key] = content
+            return key
+
+        def delete(self, key):
+            self.objects.pop(key, None)
+
+        def read(self, key):
+            return self.objects[key]
+
+        def url_for(self, key):
+            return f"https://bucket.s3.amazonaws.com/{key}?X-Amz-Signature=sig"
+
+    fake = FakeS3()
+    monkeypatch.setattr(factory, "get_storage", lambda name: fake)
+
+    upload = client.post(
+        "/api/v1/meals/analyze",
+        headers=auth_headers,
+        files={"file": ("meal.jpg", _jpeg_bytes(), "image/jpeg")},
+    )
+    meal_id = upload.json()["meal_id"]
+    meal = db_session.get(Meal, meal_id)
+    assert meal.image_storage == "s3"
+    assert meal.image_key in fake.objects
+
+    detail = client.get(f"/api/v1/meals/{meal_id}", headers=auth_headers).json()
+    assert detail["image_url"].startswith(f"https://bucket.s3.amazonaws.com/{meal.image_key}")
+
+
+def test_menu_meal_has_no_photo(client, auth_headers, db_session, test_user):
+    from datetime import UTC, datetime
+
+    from app.models.meal import Meal
+
+    meal = Meal(
+        user_id=test_user.id,
+        source="menu_template",
+        status="analyzed",
+        total_calories=300,
+        captured_at=datetime.now(UTC),
+    )
+    db_session.add(meal)
+    db_session.commit()
+
+    detail = client.get(f"/api/v1/meals/{meal.id}", headers=auth_headers).json()
+    assert detail["has_image"] is False
+    response = client.get(f"/api/v1/meals/{meal.id}/image", headers=auth_headers)
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "meal_image_not_found"
 
 
 def test_meal_type_for_time_uses_meal_windows():

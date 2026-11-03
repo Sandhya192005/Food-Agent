@@ -100,7 +100,7 @@ def test_apply_sanity_checks_leaves_normal_items_untouched():
 def test_find_recent_duplicate_matches_within_window(db_session, test_user):
     meal = Meal(
         user_id=test_user.id,
-        image_path="x.jpg",
+        image_key="x.jpg",
         image_hash="abc123",
         status="analyzed",
         captured_at=datetime.now(UTC),
@@ -116,7 +116,7 @@ def test_find_recent_duplicate_matches_within_window(db_session, test_user):
 def test_find_recent_duplicate_ignores_different_hash(db_session, test_user):
     meal = Meal(
         user_id=test_user.id,
-        image_path="x.jpg",
+        image_key="x.jpg",
         image_hash="abc123",
         status="analyzed",
         captured_at=datetime.now(UTC),
@@ -135,7 +135,7 @@ def test_find_recent_duplicate_ignores_stale_upload_outside_window(db_session, t
     )
     meal = Meal(
         user_id=test_user.id,
-        image_path="x.jpg",
+        image_key="x.jpg",
         image_hash="abc123",
         status="analyzed",
         captured_at=stale_time,

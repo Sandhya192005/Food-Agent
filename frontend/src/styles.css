@@ -1097,3 +1097,41 @@ legend {
   flex: none;
 }
 
+
+/* Meal photo and nutrition totals on the meal details page */
+.meal-photo {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.meal-photo img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+.meal-photo-loading {
+  display: grid;
+  place-items: center;
+  height: 200px;
+}
+.nutrition-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.nutrition-totals > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  text-align: center;
+}
+@media (max-width: 420px) {
+  .nutrition-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -54,3 +54,10 @@ class AIServiceConfigError(AIServiceError):
 class AIResponseInvalidError(AIServiceError):
     status_code = 502
     code = "ai_response_invalid"
+
+
+class StorageError(AppException):
+    """The photo store (e.g. S3) failed: bad credentials, missing bucket, network."""
+
+    status_code = 502
+    code = "storage_error"

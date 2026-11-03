@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { MealItems, SOURCE_LABEL, Warnings } from "../components/MealItems";
+import { MealItems, NutritionTotals, SOURCE_LABEL, Warnings } from "../components/MealItems";
+import { MealPhoto } from "../components/MealPhoto";
 import { Card, Empty, ErrorNote, Loading, PageHeader } from "../components/ui";
 import { api, notifyDataChanged } from "../lib/api";
 import { useUser } from "../lib/auth";
@@ -206,6 +207,8 @@ export function MealDetail() {
           action={<strong>{kcal(data.total_calories)}</strong>}
         >
           <div className="stack">
+            <MealPhoto key={data.id} meal={data} />
+            <NutritionTotals items={data.items} calories={data.total_calories} />
             <p className="muted small">{SOURCE_LABEL[data.source] ?? data.source}</p>
             <MealItems items={data.items} />
             <Warnings warnings={data.warnings} />

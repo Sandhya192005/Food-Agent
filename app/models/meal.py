@@ -15,9 +15,11 @@ class Meal(TimestampMixin, AuditMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
 
-    # Null for meals logged via a weekly menu template (source="menu_template"),
-    # since there's no uploaded photo in that case.
-    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Where the photo is stored: the object key (S3) or file name (local), plus
+    # which storage holds it ("local" or "s3"). Both null for meals logged from a
+    # weekly menu template (source="menu_template"), since there's no photo.
+    image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_storage: Mapped[str | None] = mapped_column(String(10), nullable=True)
     image_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
 
     source: Mapped[str] = mapped_column(String(20), nullable=False, default=MEAL_SOURCE_PHOTO)

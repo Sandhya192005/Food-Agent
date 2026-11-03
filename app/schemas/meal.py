@@ -106,11 +106,21 @@ class MealSummaryOut(BaseModel):
 
 class MealDetailOut(MealSummaryOut):
     items: list[MealItemOut]
+    has_image: bool = Field(default=False, description="True for meals logged with a photo")
+    image_url: str | None = Field(
+        default=None,
+        description="Temporary link to the photo (S3 presigned URL, expires in a few "
+        "minutes). Null when the photo is on local disk: fetch GET /meals/{id}/image instead.",
+    )
 
     @classmethod
-    def from_model(cls, meal: "Meal", timezone: ZoneInfo | None = None) -> "MealDetailOut":
+    def from_model(
+        cls, meal: "Meal", timezone: ZoneInfo | None = None, *, image_url: str | None = None
+    ) -> "MealDetailOut":
         summary = MealSummaryOut.from_model(meal, timezone)
         return cls(
             **summary.model_dump(),
             items=[MealItemOut.from_model(item) for item in meal.items],
+            has_image=meal.image_key is not None,
+            image_url=image_url,
         )
