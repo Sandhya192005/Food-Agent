@@ -2,7 +2,9 @@
 
 FastAPI backend for a personal nutrition assistant: profile-aware food photo analysis
 (OpenAI vision), a recurring office-menu shortcut for logging meals without a photo,
-water tracking, and AI-generated nutrition recommendations (OpenAI text).
+water tracking, and AI-generated nutrition recommendations (OpenAI text), with a
+React web frontend. It runs fully on your own computer, or with AWS: meal photos in
+**Amazon S3** and the database in **Amazon RDS** (PostgreSQL).
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the pieces fit together, the database
 schema, and the key design decisions behind them.
@@ -28,6 +30,11 @@ schema, and the key design decisions behind them.
 - **AI nutrition recommendations** that respect diet preference, medical conditions,
   and food budget, generated from the user's profile, meal history, and hydration
   progress.
+- **AWS cloud (optional)**: meal photos can be stored in a private **Amazon S3**
+  bucket (boto3, presigned links, object key saved in PostgreSQL), and the database
+  can run on **Amazon RDS** for PostgreSQL. Both are switched on in `.env` only; see
+  [Storing meal photos in AWS S3](#storing-meal-photos-in-aws-s3) and
+  [Using AWS RDS for the database](#using-aws-rds-for-the-database).
 - **Audit trail**: every table tracks `created_by`/`updated_by`/`deleted_at`/
   `deleted_by`; deletes are soft (rows are marked inactive, not erased) so history
   stays queryable.
@@ -41,6 +48,11 @@ schema, and the key design decisions behind them.
    - PostgreSQL: `postgresql+psycopg2://user:password@localhost:5432/food_agent_db`
      — create the database/role yourself first (`CREATE DATABASE`, `CREATE ROLE ...
      LOGIN PASSWORD ...`); the app doesn't create it for you.
+   - AWS RDS (PostgreSQL in the cloud): see
+     [Using AWS RDS for the database](#using-aws-rds-for-the-database).
+
+   Meal photos are saved in `media/` by default (`STORAGE_BACKEND=local`). To keep
+   them in AWS instead, see [Storing meal photos in AWS S3](#storing-meal-photos-in-aws-s3).
 3. Create a virtual environment and install dependencies:
 
    ```
