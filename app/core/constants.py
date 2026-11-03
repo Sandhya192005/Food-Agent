@@ -114,6 +114,15 @@ MEAL_TYPE_TIME_RANGES: list[tuple[MealType, time, time]] = [
     (MealType.DINNER, time(19, 30), time(21, 0)),
 ]
 
+
+def meal_type_for_time(local_time: time) -> MealType:
+    """Which meal a local time of day falls in; SNACK outside all windows."""
+    for meal_type, start, end in MEAL_TYPE_TIME_RANGES:
+        if start <= local_time < end:
+            return meal_type
+    return MealType.SNACK
+
+
 WATER_SOURCE_QUICK_YES = "quick_yes"
 WATER_SOURCE_CUSTOM_AMOUNT = "custom_amount"
 DEFAULT_QUICK_WATER_AMOUNT_ML = 250

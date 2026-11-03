@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -9,17 +9,17 @@ from app.core.constants import (
     DAY_OF_WEEK_DISPLAY,
     MEAL_SOURCE_MENU_TEMPLATE,
     MEAL_STATUS_ANALYZED,
-    MEAL_TYPE_TIME_RANGES,
     DayOfWeek,
     MealType,
+    meal_type_for_time,
 )
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.models.meal import Meal, MealItem
 from app.models.menu import WeeklyMenu, WeeklyMenuItem
 from app.models.user import User
 from app.schemas.meal import MealAnalyzeResponse
 from app.schemas.menu import MenuConfirmRequest, MenuPromptOut, WeeklyMenuIn
-from app.services import meal_service, meal_validation
+from app.services import meal_service, meal_validation, skipped_meal_service
 from app.services.meal_validation import RawFoodItem
 from app.services.timezone_utils import user_timezone
 
@@ -122,11 +122,7 @@ def delete_menu_entry(db: Session, weekly_menu_id: int) -> None:
 
 
 def _infer_meal_type(now_local: datetime) -> MealType:
-    current_time = now_local.time()
-    for meal_type, start, end in MEAL_TYPE_TIME_RANGES:
-        if start <= current_time < end:
-            return meal_type
-    return MealType.SNACK
+    return meal_type_for_time(now_local.time())
 
 
 def get_today_prompt(db: Session, user: User, meal_type: MealType | None) -> MenuPromptOut:
@@ -155,9 +151,7 @@ def get_today_prompt(db: Session, user: User, meal_type: MealType | None) -> Men
             quick_actions=[],
         )
 
-    question = (
-        f"Today is {day_name}, is your {resolved_meal_type.value} going to be {menu.label}?"
-    )
+    question = f"Today is {day_name}, is your {resolved_meal_type.value} going to be {menu.label}?"
     return MenuPromptOut(
         has_menu=True,
         day_name=day_name,
@@ -169,6 +163,33 @@ def get_today_prompt(db: Session, user: User, meal_type: MealType | None) -> Men
     )
 
 
+# How far back a missed meal can be logged, and clock skew allowed for "now".
+MAX_BACKDATE = timedelta(days=7)
+FUTURE_GRACE = timedelta(minutes=5)
+
+
+def _resolve_eaten_at(user: User, menu: WeeklyMenu, eaten_at: datetime | None) -> datetime:
+    now = datetime.now(UTC)
+    if eaten_at is None:
+        return now
+    tz = user_timezone(user)
+    if eaten_at.tzinfo is None:
+        eaten_at = eaten_at.replace(tzinfo=tz)
+    eaten_at = eaten_at.astimezone(UTC)
+    if eaten_at > now + FUTURE_GRACE:
+        raise ValidationError("eaten_at can't be in the future", code="eaten_at_in_future")
+    if eaten_at < now - MAX_BACKDATE:
+        raise ValidationError("Meals can only be logged up to 7 days back", code="eaten_at_too_old")
+    local_day = DAY_OF_WEEK_BY_INDEX[eaten_at.astimezone(tz).weekday()]
+    if local_day != menu.day_of_week:
+        raise ValidationError(
+            f"eaten_at is a {DAY_OF_WEEK_DISPLAY[local_day]}, but this menu is for "
+            f"{DAY_OF_WEEK_DISPLAY[menu.day_of_week]}",
+            code="eaten_at_day_mismatch",
+        )
+    return eaten_at
+
+
 def confirm_meal_from_menu(
     db: Session, user: User, payload: MenuConfirmRequest
 ) -> MealAnalyzeResponse:
@@ -177,6 +198,10 @@ def confirm_meal_from_menu(
     else:
         assert payload.day_of_week is not None and payload.meal_type is not None
         menu = get_menu_for_slot(db, payload.day_of_week, payload.meal_type)
+    captured_at = _resolve_eaten_at(user, menu, payload.eaten_at)
+    skipped_meal_service.clear_skip(
+        db, user, captured_at.astimezone(user_timezone(user)).date(), menu.meal_type
+    )
 
     raw_items = [
         RawFoodItem(
@@ -202,11 +227,9 @@ def confirm_meal_from_menu(
         weekly_menu_id=menu.id,
         status=MEAL_STATUS_ANALYZED,
         total_calories=total_calories,
-        analysis_raw_response=json.dumps(
-            {"weekly_menu_id": menu.id, "label": menu.label}
-        ),
+        analysis_raw_response=json.dumps({"weekly_menu_id": menu.id, "label": menu.label}),
         analysis_warning="; ".join(warnings) if warnings else None,
-        captured_at=datetime.now(UTC),
+        captured_at=captured_at,
         created_by=user.id,
         updated_by=user.id,
     )

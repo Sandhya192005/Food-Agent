@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,7 @@ from app.schemas.menu import MenuConfirmRequest
 from app.services import meal_service, menu_service
 from app.services.storage.base import StorageBackend
 from app.services.storage.local import get_storage_backend
+from app.services.timezone_utils import user_timezone
 
 router = APIRouter(prefix="/meals", tags=["meals"])
 
@@ -63,11 +66,19 @@ def confirm_meal_from_menu(
 def list_meals(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    on_date: date | None = Query(
+        default=None,
+        alias="date",
+        description="Only meals eaten on this day (YYYY-MM-DD, in your timezone)",
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[MealSummaryOut]:
-    meals = meal_service.list_meals(db, current_user, page=page, page_size=page_size)
-    return [MealSummaryOut.from_model(m) for m in meals]
+    meals = meal_service.list_meals(
+        db, current_user, page=page, page_size=page_size, on_date=on_date
+    )
+    timezone = user_timezone(current_user)
+    return [MealSummaryOut.from_model(m, timezone) for m in meals]
 
 
 @router.get("/{meal_id}", response_model=MealDetailOut, summary="Get a single meal's detail")
@@ -77,7 +88,7 @@ def get_meal(
     db: Session = Depends(get_db),
 ) -> MealDetailOut:
     meal = meal_service.get_meal(db, current_user, meal_id)
-    return MealDetailOut.from_model(meal)
+    return MealDetailOut.from_model(meal, user_timezone(current_user))
 
 
 @router.delete(
