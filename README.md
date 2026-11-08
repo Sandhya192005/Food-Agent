@@ -248,16 +248,41 @@ go back to your local database, restore your old `DATABASE_URL` line and restart
 ## Running with Docker
 
 ```
-docker-compose up --build
+docker compose up -d --build
 ```
 
-This runs migrations automatically on container start and serves the API on
-`http://localhost:8000`. **Note:** `docker-compose.yml` is currently wired for
-SQLite only (bind-mounted to `./data` on the host) — it has not been updated for
-PostgreSQL. If you want to run Docker against Postgres, `docker-compose.yml` needs
-a `DATABASE_URL` override (and, if you want Postgres itself containerized, a `db`
-service added). Because SQLite is a single-writer file database, the SQLite path
-must be run as a single replica regardless.
+This starts two containers: **db** (PostgreSQL 17, data kept in the `pgdata`
+volume) and **api** (runs the migrations, then serves the API on
+`http://localhost:8000`). Settings come from `.env`; inside Docker the database
+address is set for you, so `DATABASE_URL` in `.env` is ignored. Optional `.env`
+values: `POSTGRES_PASSWORD` (the database container's password) and `API_PORT`.
+
+- Logs: `docker compose logs -f api`
+- Stop: `docker compose down` (add `-v` to also delete the database)
+
+### Running on AWS EC2
+
+1. Launch an **Ubuntu Server 24.04** `t3.micro` instance (free tier) with a new
+   `.pem` key pair. Set **Credit specification** to **Standard** (Unlimited can add
+   charges).
+2. In its security group, allow **SSH (22)** and **Custom TCP 8000** from **My IP**
+   only.
+3. Connect: `ssh -i food-agent-key.pem ubuntu@PUBLIC_IP`
+4. On the server:
+
+   ```bash
+   sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+   sudo usermod -aG docker ubuntu   # then log out and in again
+   sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+   git clone https://github.com/Sandhya192005/Food-Agent.git && cd Food-Agent
+   cp .env.example .env && nano .env   # set SECRET_KEY and OPENAI_API_KEY
+   docker compose up -d --build
+   ```
+
+5. Open `http://PUBLIC_IP:8000/docs`.
+
+EC2 is charged for every hour the instance runs: **Stop** it when you take a break,
+and **Terminate** it when you're done (then check EC2 → Volumes is empty).
 
 ## Tests
 

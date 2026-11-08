@@ -1,16 +1,46 @@
+# Runs the API with its own PostgreSQL database (the migrations are PostgreSQL-only).
+#   docker compose up -d --build     start (first build takes a few minutes)
+#   docker compose logs -f api       watch the API logs
+#   docker compose down              stop (the database is kept in the pgdata volume)
+#
+# Settings come from .env (SECRET_KEY, OPENAI_API_KEY, ...). Optional in .env:
+#   POSTGRES_PASSWORD  password for the database container (default below)
+#   API_PORT           port on this machine for the API (default 8000)
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: food_agent_db
+      POSTGRES_USER: food_agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-food_agent_docker}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U food_agent -d food_agent_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      - ./data:/app/data
       - ./media:/app/media
-    environment:
-      - DATABASE_URL=sqlite:///./data/food_agent.db
-      - MEDIA_ROOT=/app/media
-      - ENVIRONMENT=prod
     env_file:
       - .env
+    # These override .env: inside Docker the database is the "db" container,
+    # not localhost.
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://food_agent:${POSTGRES_PASSWORD:-food_agent_docker}@db:5432/food_agent_db
+      - MEDIA_ROOT=/app/media
+      - ENVIRONMENT=prod
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     restart: unless-stopped
+
+volumes:
+  pgdata:
