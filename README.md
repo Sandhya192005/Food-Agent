@@ -1,5 +1,7 @@
 # AI Food Agent
 
+[![Tests](https://github.com/Sandhya192005/Food-Agent/actions/workflows/tests.yml/badge.svg)](https://github.com/Sandhya192005/Food-Agent/actions/workflows/tests.yml)
+
 FastAPI backend for a personal nutrition assistant: profile-aware food photo analysis
 (OpenAI vision), a recurring office-menu shortcut for logging meals without a photo,
 water tracking, and AI-generated nutrition recommendations (OpenAI text), with a
